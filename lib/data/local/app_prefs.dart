@@ -194,17 +194,17 @@ class AppPrefs {
     if (rows == null) return null;
     final cards = <CardModel>[];
     for (final row in rows) {
-      dynamic decoded;
+      dynamic cardData;
       try {
-        decoded = jsonDecode(row);
+        cardData = jsonDecode(row);
       } catch (_) {
         continue;
       }
-      if (decoded is! Map<String, dynamic>) continue;
-      final id = decoded['id'];
-      final front = decoded['front'];
-      final back = decoded['back'];
-      final state = decoded['state'];
+      if (cardData is! Map<String, dynamic>) continue;
+      final id = cardData['id'];
+      final front = cardData['front'];
+      final back = cardData['back'];
+      final state = cardData['state'];
       if (id is! String || front is! String || back is! String || state is! String) {
         continue;
       }
