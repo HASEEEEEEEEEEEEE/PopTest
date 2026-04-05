@@ -44,7 +44,7 @@ class PopStudyController
     extends AutoDisposeFamilyNotifier<PopStudyState, String> {
   @override
   PopStudyState build(String deckId) {
-    final repo = ref.read(deckRepositoryProvider);
+    final repo = ref.read(deckRepositoryProvider.notifier);
     final newLimit = ref.read(newLimitProvider);
     final deck = repo.getDeck(deckId);
     final queue = buildSessionQueue(cards: deck.cards, newLimit: newLimit);
@@ -65,7 +65,12 @@ class PopStudyController
     final newQueue = [...state.queue.skip(1), card];
     final newCardMap = Map<String, CardModel>.of(state.cardMap)
       ..[card.id] = card;
-    state = state.copyWith(queue: newQueue, cardMap: newCardMap, showBack: false);
+    state =
+        state.copyWith(queue: newQueue, cardMap: newCardMap, showBack: false);
+    // Persist the updated card state.
+    ref
+        .read(deckRepositoryProvider.notifier)
+        .updateCardState(deckId, card.id, card);
   }
 
   /// "Good" – advance state and remove card from queue.
@@ -79,7 +84,12 @@ class PopStudyController
     final newQueue = state.queue.skip(1).toList();
     final newCardMap = Map<String, CardModel>.of(state.cardMap)
       ..[card.id] = card;
-    state = state.copyWith(queue: newQueue, cardMap: newCardMap, showBack: false);
+    state =
+        state.copyWith(queue: newQueue, cardMap: newCardMap, showBack: false);
+    // Persist the updated card state.
+    ref
+        .read(deckRepositoryProvider.notifier)
+        .updateCardState(deckId, card.id, card);
   }
 }
 

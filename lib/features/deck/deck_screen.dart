@@ -14,8 +14,15 @@ class DeckScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.watch(deckRepositoryProvider);
-    final deck = repo.getDeck(deckId);
+    // Watch the state map directly – rebuilds when card states change.
+    final deckMap = ref.watch(deckRepositoryProvider);
+    if (deckMap.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: Text(deckId)),
+        body: const Center(child: Text('デッキが見つかりません')),
+      );
+    }
+    final deck = deckMap[deckId] ?? deckMap.values.first;
     final counts = countAll(deck.cards);
 
     return Scaffold(
@@ -39,7 +46,7 @@ class DeckScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         _StateCount(
-                            label: '新規',
+                            label: '未学習',
                             count: counts.nNew,
                             color: Colors.blue),
                         _StateCount(
@@ -47,7 +54,7 @@ class DeckScreen extends ConsumerWidget {
                             count: counts.nLearning,
                             color: Colors.orange),
                         _StateCount(
-                            label: '復習',
+                            label: '復習中',
                             count: counts.nReview,
                             color: Colors.green),
                       ],
