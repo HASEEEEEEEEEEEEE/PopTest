@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../routing/router.dart';
 import '../pop_study/pop_repository.dart';
+import '../pop_study/pop_settings.dart';
 import 'selected_deck_provider.dart';
 
 /// Home / Dashboard screen.
@@ -18,6 +19,8 @@ class HomeScreen extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final decks = ref.watch(deckRepositoryProvider).values.toList();
     final selectedDeckId = ref.watch(selectedDeckProvider);
+    final popSettings = ref.watch(popSettingsProvider);
+    final servicesEmpty = popSettings.services.isEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('ホーム')),
@@ -83,12 +86,23 @@ class HomeScreen extends ConsumerWidget {
               child: FilledButton.icon(
                 icon: const Icon(Icons.play_arrow),
                 label: const Text('ポップ学習を開始'),
-                onPressed: selectedDeckId == null
+                onPressed: selectedDeckId == null || servicesEmpty
                     ? null
                     : () => context
                         .go('${AppRoutes.decks}/$selectedDeckId/pop'),
               ),
             ),
+            if (selectedDeckId != null && servicesEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '設定画面で対象サービスを選択してください',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: colorScheme.error),
+                ),
+              ),
           ],
         ),
       ),

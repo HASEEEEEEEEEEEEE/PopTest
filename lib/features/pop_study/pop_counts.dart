@@ -26,14 +26,20 @@ import 'pop_models.dart';
 
 /// Build the initial session queue for a deck.
 /// Order: learning → review → new (capped at [newLimit]).
+/// If [sessionLimit] is provided, the total queue length is also capped.
 List<CardModel> buildSessionQueue({
   required List<CardModel> cards,
   required int newLimit,
+  int? sessionLimit,
 }) {
   final learning = cards.where((c) => c.state == CardState.learning).toList();
   // TODO: filter review by dueAt <= now when Drift is integrated.
   final review = cards.where((c) => c.state == CardState.review).toList();
   final news =
       cards.where((c) => c.state == CardState.newCard).take(newLimit).toList();
-  return [...learning, ...review, ...news];
+  final full = [...learning, ...review, ...news];
+  if (sessionLimit != null && sessionLimit > 0 && full.length > sessionLimit) {
+    return full.take(sessionLimit).toList();
+  }
+  return full;
 }
