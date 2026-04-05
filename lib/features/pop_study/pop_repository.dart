@@ -43,8 +43,12 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
 
   List<DeckData> getAll() => state.values.toList();
 
-  DeckData getDeck(String deckId) =>
-      state[deckId] ?? state.values.first;
+  DeckData getDeck(String deckId) {
+    if (state.isEmpty) {
+      return DeckData(deckId: deckId, name: '', cards: const []);
+    }
+    return state[deckId] ?? state.values.first;
+  }
 
   /// Updates a single card's state both in memory and in [AppPrefs].
   void updateCardState(

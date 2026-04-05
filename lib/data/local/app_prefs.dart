@@ -66,9 +66,10 @@ class AppPrefs {
       };
 
   static CardState _parseCardState(String raw) => switch (raw) {
+        'new' => CardState.newCard,
         'learning' => CardState.learning,
         'review' => CardState.review,
-        _ => CardState.newCard, // default / forward-compat
+        _ => CardState.newCard, // forward-compat fallback
       };
 }
 

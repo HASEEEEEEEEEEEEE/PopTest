@@ -16,6 +16,12 @@ class DeckScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the state map directly – rebuilds when card states change.
     final deckMap = ref.watch(deckRepositoryProvider);
+    if (deckMap.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: Text(deckId)),
+        body: const Center(child: Text('デッキが見つかりません')),
+      );
+    }
     final deck = deckMap[deckId] ?? deckMap.values.first;
     final counts = countAll(deck.cards);
 
