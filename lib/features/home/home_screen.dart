@@ -182,7 +182,7 @@ class HomeScreen extends ConsumerWidget {
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: isActive
                                   ? colorScheme.onPrimaryContainer
-                                      .withValues(alpha: 0.8)
+                                      .withOpacity(0.8)
                                   : null,
                             ),
                       ),

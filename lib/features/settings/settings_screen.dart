@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../pop_study/pop_models.dart';
 import '../pop_study/pop_settings.dart';
 import 'settings_providers.dart';
 
