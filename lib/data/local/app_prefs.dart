@@ -183,6 +183,10 @@ class AppPrefs {
             }))
         .toList();
     await _prefs.setStringList('$_prefixDeckCards$deckId', rows);
+    for (final card in cards) {
+      await _prefs.setString(
+          _cardStateKey(deckId, card.id), _serializeCardState(card.state));
+    }
   }
 
   List<CardModel>? getDeckCards(String deckId) {

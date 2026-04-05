@@ -140,11 +140,7 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
     final cards =
         deck.cards.map((c) => c.copyWith(state: CardState.newCard)).toList();
     state = Map.of(state)..[deckId] = deck.copyWith(cards: cards);
-    final prefs = ref.read(appPrefsProvider);
-    await prefs.setDeckCards(deckId, cards);
-    for (final card in cards) {
-      await prefs.setCardState(deckId, card.id, CardState.newCard);
-    }
+    await ref.read(appPrefsProvider).setDeckCards(deckId, cards);
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
