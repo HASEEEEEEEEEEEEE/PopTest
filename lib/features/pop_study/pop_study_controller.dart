@@ -70,7 +70,7 @@ class PopStudyController
     // Persist the updated card state.
     ref
         .read(deckRepositoryProvider.notifier)
-        .updateCardState(deckId, card.id, card);
+        .updateCardState(arg, card.id, card);
   }
 
   /// "Good" – advance state and remove card from queue.
@@ -89,7 +89,7 @@ class PopStudyController
     // Persist the updated card state.
     ref
         .read(deckRepositoryProvider.notifier)
-        .updateCardState(deckId, card.id, card);
+        .updateCardState(arg, card.id, card);
   }
 }
 
