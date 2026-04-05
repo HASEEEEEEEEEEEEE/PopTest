@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../features/deck/deck_screen.dart';
 import '../features/deck/decks_screen.dart';
+import '../features/deck/deck_edit_screen.dart';
+import '../features/deck/deck_pop_settings_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/pop_study/pop_study_screen.dart';
 import '../features/review/review_screen.dart';
@@ -51,6 +53,20 @@ final routerProvider = Provider<GoRouter>((ref) {
                       return DeckScreen(deckId: deckId);
                     },
                     routes: [
+                      GoRoute(
+                        path: 'pop-settings',
+                        builder: (context, state) {
+                          final deckId = state.pathParameters['deckId']!;
+                          return DeckPopSettingsScreen(deckId: deckId);
+                        },
+                      ),
+                      GoRoute(
+                        path: 'edit',
+                        builder: (context, state) {
+                          final deckId = state.pathParameters['deckId']!;
+                          return DeckEditScreen(deckId: deckId);
+                        },
+                      ),
                       GoRoute(
                         path: 'pop',
                         builder: (context, state) {

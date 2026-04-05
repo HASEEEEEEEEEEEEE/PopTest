@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../pop_study/pop_models.dart';
+import '../pop_study/deck_pop_settings.dart';
 import '../pop_study/pop_repository.dart';
 import '../pop_study/pop_settings.dart';
 import '../pop_study/pop_study_active_provider.dart';
@@ -19,8 +20,11 @@ class HomeScreen extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final decks = ref.watch(deckRepositoryProvider).values.toList();
     final selectedDeckId = ref.watch(selectedDeckProvider);
-    final popSettings = ref.watch(popSettingsProvider);
+    final globalPopSettings = ref.watch(popSettingsProvider);
     final isActive = ref.watch(popStudyActiveProvider);
+    final effectivePopSettings = selectedDeckId == null
+        ? globalPopSettings
+        : ref.watch(effectivePopSettingsProvider(selectedDeckId!));
 
     final selectedDeck = decks.firstWhere(
       (d) => d.deckId == selectedDeckId,
@@ -32,7 +36,7 @@ class HomeScreen extends ConsumerWidget {
             : null;
 
     final canStart =
-        selectedDeckId != null && popSettings.services.isNotEmpty;
+        selectedDeckId != null && effectivePopSettings.services.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('ホーム')),
@@ -43,7 +47,7 @@ class HomeScreen extends ConsumerWidget {
           if (isActive)
             _PopStudyStatusBar(
               deckName: deckName,
-              questionsPerPopup: popSettings.popCount,
+              questionsPerPopup: effectivePopSettings.popCount,
             ),
 
           // ── Main content ───────────────────────────────────────────────
@@ -124,20 +128,26 @@ class HomeScreen extends ConsumerWidget {
                           Wrap(
                             spacing: 8,
                             runSpacing: 4,
-                            children: PopService.values
-                                .map(
-                                  (service) => FilterChip(
-                                    label: Text(service.label),
-                                    selected: popSettings.services
-                                        .contains(service),
-                                    onSelected: (_) => ref
-                                        .read(popSettingsProvider.notifier)
-                                        .toggleService(service),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                          if (popSettings.services.isEmpty)
+                             children: PopService.values
+                                 .map(
+                                   (service) => FilterChip(
+                                     label: Text(service.label),
+                                     selected: effectivePopSettings.services
+                                         .contains(service),
+                                     onSelected: selectedDeckId == null
+                                         ? (_) => ref
+                                             .read(popSettingsProvider.notifier)
+                                             .toggleService(service)
+                                         : (_) => ref
+                                             .read(deckPopSettingsProvider(
+                                                     selectedDeckId!)
+                                                 .notifier)
+                                             .toggleService(service),
+                                   ),
+                                 )
+                                 .toList(),
+                           ),
+                           if (effectivePopSettings.services.isEmpty)
                             Padding(
                               padding: const EdgeInsets.only(top: 6),
                               child: Text(

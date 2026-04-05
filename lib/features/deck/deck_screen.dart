@@ -75,21 +75,14 @@ class DeckScreen extends ConsumerWidget {
             OutlinedButton.icon(
               icon: const Icon(Icons.notifications_outlined),
               label: const Text('ポップ設定'),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('ポップ設定 (未実装)')),
-                );
-              },
+              onPressed: () =>
+                  context.go('${AppRoutes.decks}/$deckId/pop-settings'),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               icon: const Icon(Icons.edit_outlined),
               label: const Text('編集'),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('編集 (未実装)')),
-                );
-              },
+              onPressed: () => context.go('${AppRoutes.decks}/$deckId/edit'),
             ),
           ],
         ),
