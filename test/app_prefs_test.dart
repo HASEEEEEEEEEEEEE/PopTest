@@ -71,5 +71,22 @@ void main() {
       final prefs2 = AppPrefs(sp2);
       expect(prefs2.getCardState('d1', 'c1'), CardState.newCard);
     });
+
+    // ── popStudyActive ──────────────────────────────────────────────────────
+
+    test('popStudyActive is false when nothing is stored', () {
+      expect(prefs.popStudyActive, isFalse);
+    });
+
+    test('setPopStudyActive persists true', () async {
+      await prefs.setPopStudyActive(true);
+      expect(prefs.popStudyActive, isTrue);
+    });
+
+    test('setPopStudyActive persists false after true', () async {
+      await prefs.setPopStudyActive(true);
+      await prefs.setPopStudyActive(false);
+      expect(prefs.popStudyActive, isFalse);
+    });
   });
 }
