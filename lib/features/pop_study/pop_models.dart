@@ -70,6 +70,56 @@ class PopSettings {
   }
 }
 
+/// Deck-level pop settings.
+///
+/// If [useGlobal] is true, deck-specific fields are ignored and global
+/// [PopSettings] are used instead.
+class DeckPopSettings {
+  const DeckPopSettings({
+    required this.useGlobal,
+    required this.services,
+    required this.intervalMinutes,
+    required this.popCount,
+  });
+
+  final bool useGlobal;
+  final Set<PopService> services;
+  final int intervalMinutes;
+  final int popCount;
+
+  factory DeckPopSettings.defaults() => const DeckPopSettings(
+        useGlobal: true,
+        services: {},
+        intervalMinutes: PopSettings.defaultIntervalMinutes,
+        popCount: PopSettings.defaultPopCount,
+      );
+
+  DeckPopSettings copyWith({
+    bool? useGlobal,
+    Set<PopService>? services,
+    int? intervalMinutes,
+    int? popCount,
+  }) {
+    return DeckPopSettings(
+      useGlobal: useGlobal ?? this.useGlobal,
+      services: services ?? this.services,
+      intervalMinutes: (intervalMinutes ?? this.intervalMinutes)
+          .clamp(PopSettings.minIntervalMinutes, PopSettings.maxIntervalMinutes),
+      popCount:
+          (popCount ?? this.popCount).clamp(PopSettings.minPopCount, PopSettings.maxPopCount),
+    );
+  }
+
+  PopSettings resolve(PopSettings global) {
+    if (useGlobal) return global;
+    return PopSettings(
+      services: services,
+      intervalMinutes: intervalMinutes,
+      popCount: popCount,
+    );
+  }
+}
+
 /// Lightweight in-memory card model.
 /// TODO: replace with Drift entity in issue #2.
 class CardModel {
