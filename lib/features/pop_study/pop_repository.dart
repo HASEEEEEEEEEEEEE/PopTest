@@ -132,9 +132,6 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
 
   Future<void> resetCardState(String deckId, String cardId) async {
     await updateCard(deckId, cardId, stateValue: CardState.newCard);
-    await ref
-        .read(appPrefsProvider)
-        .setCardState(deckId, cardId, CardState.newCard);
   }
 
   Future<void> resetAllCardStates(String deckId) async {

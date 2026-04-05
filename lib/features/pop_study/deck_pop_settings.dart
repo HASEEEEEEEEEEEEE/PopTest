@@ -12,7 +12,7 @@ class DeckPopSettingsNotifier
 
   Future<void> _persist(DeckPopSettings next) async {
     state = next;
-    await ref.read(appPrefsProvider).setDeckPopSettings(arg, next);
+    await ref.read(appPrefsProvider).setDeckPopSettings(this.arg, next);
   }
 
   Future<void> setUseGlobal(bool value) async {
