@@ -12,8 +12,9 @@ class DecksScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.watch(deckRepositoryProvider);
-    final decks = repo.getAll();
+    // Watch the state map directly – rebuilds when card states change.
+    final deckMap = ref.watch(deckRepositoryProvider);
+    final decks = deckMap.values.toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('デッキ一覧')),

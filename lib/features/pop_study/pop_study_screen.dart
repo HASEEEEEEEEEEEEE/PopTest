@@ -158,7 +158,7 @@ class _CountsBar extends StatelessWidget {
           const SizedBox(width: 8),
           const Text('| '),
           _CountChip(
-            label: '新規: ${counts.nNew}',
+            label: '未学習: ${counts.nNew}',
             highlight: currentState == CardState.newCard,
           ),
           const SizedBox(width: 4),
@@ -168,7 +168,7 @@ class _CountsBar extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           _CountChip(
-            label: '復習: ${counts.nReview}',
+            label: '復習中: ${counts.nReview}',
             highlight: currentState == CardState.review,
           ),
         ],
