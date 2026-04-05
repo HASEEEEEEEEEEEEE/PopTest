@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../pop_study/pop_models.dart';
 import '../pop_study/pop_settings.dart';
 import 'settings_providers.dart';
 
@@ -70,56 +69,6 @@ class SettingsScreen extends ConsumerWidget {
           // ── ポップ学習 ────────────────────────────────────────────────────
           const SizedBox(height: 24),
           Text('ポップ学習', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-
-          // 対象サービス
-          Card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('対象サービス'),
-                      Text(
-                        '問題を表示するSNSを選択（複数可）',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      if (popSettings.services.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            'サービス未選択：ポップ学習は無効です',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                ...PopService.values.map(
-                  (service) => CheckboxListTile(
-                    title: Text(service.label),
-                    value: popSettings.services.contains(service),
-                    onChanged: (_) => ref
-                        .read(popSettingsProvider.notifier)
-                        .toggleService(service),
-                    dense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16),
-                  ),
-                ),
-                const SizedBox(height: 4),
-              ],
-            ),
-          ),
           const SizedBox(height: 8),
 
           // 出題頻度

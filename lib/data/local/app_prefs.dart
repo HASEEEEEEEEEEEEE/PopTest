@@ -129,6 +129,17 @@ class AppPrefs {
     }
     return null; // forward-compat: unknown values are silently dropped
   }
+
+  // ── Pop-study active state ─────────────────────────────────────────────────
+
+  static const _keyPopStudyActive = 'pop_study_active';
+
+  /// Whether pop-study monitoring mode is currently enabled.
+  bool get popStudyActive => _prefs.getBool(_keyPopStudyActive) ?? false;
+
+  Future<void> setPopStudyActive(bool active) async {
+    await _prefs.setBool(_keyPopStudyActive, active);
+  }
 }
 
 /// Must be overridden in [main] with a real [AppPrefs] instance.
