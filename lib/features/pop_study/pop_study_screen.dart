@@ -25,8 +25,8 @@ class PopStudyScreen extends ConsumerWidget {
     final shouldExit = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('学習を終了しますか？'),
-        content: const Text('セッションの進捗は保存されません。'),
+        title: const Text('学習を中断しますか？'),
+        content: const Text('回答済みのカード状態は保存されています。残りのカードは次回も学習できます。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),

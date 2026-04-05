@@ -8,6 +8,7 @@ import '../../features/pop_study/pop_models.dart';
 /// Stores:
 /// * The ID of the deck selected for pop-study (nullable).
 /// * Per-card learning states, keyed by `card_state_{deckId}_{cardId}`.
+/// * Pop-study settings: target services, interval, and per-session count.
 class AppPrefs {
   AppPrefs(this._prefs);
 
@@ -71,6 +72,63 @@ class AppPrefs {
         'review' => CardState.review,
         _ => CardState.newCard, // forward-compat fallback
       };
+
+  // ── Pop-study settings ─────────────────────────────────────────────────────
+
+  static const _keyPopServices = 'pop_services';
+  static const _keyPopIntervalMinutes = 'pop_interval_minutes';
+  static const _keyPopCount = 'pop_count';
+
+  /// Loads all pop-study settings, falling back to [PopSettings.defaults].
+  PopSettings loadPopSettings() {
+    final serviceNames = _prefs.getString(_keyPopServices);
+    final services = serviceNames == null || serviceNames.isEmpty
+        ? const <PopService>{}
+        : serviceNames
+            .split(',')
+            .map(_parsePopService)
+            .whereType<PopService>()
+            .toSet();
+
+    final intervalMinutes = _prefs.getInt(_keyPopIntervalMinutes) ??
+        PopSettings.defaultIntervalMinutes;
+    final popCount =
+        _prefs.getInt(_keyPopCount) ?? PopSettings.defaultPopCount;
+
+    return PopSettings(
+      services: services,
+      intervalMinutes: intervalMinutes.clamp(
+          PopSettings.minIntervalMinutes, PopSettings.maxIntervalMinutes),
+      popCount:
+          popCount.clamp(PopSettings.minPopCount, PopSettings.maxPopCount),
+    );
+  }
+
+  Future<void> setPopServices(Set<PopService> services) async {
+    if (services.isEmpty) {
+      await _prefs.remove(_keyPopServices);
+    } else {
+      await _prefs.setString(
+          _keyPopServices, services.map(_serializePopService).join(','));
+    }
+  }
+
+  Future<void> setPopIntervalMinutes(int minutes) async {
+    await _prefs.setInt(_keyPopIntervalMinutes, minutes);
+  }
+
+  Future<void> setPopCount(int count) async {
+    await _prefs.setInt(_keyPopCount, count);
+  }
+
+  static String _serializePopService(PopService s) => s.name;
+
+  static PopService? _parsePopService(String raw) {
+    for (final s in PopService.values) {
+      if (s.name == raw) return s;
+    }
+    return null; // forward-compat: unknown values are silently dropped
+  }
 }
 
 /// Must be overridden in [main] with a real [AppPrefs] instance.
