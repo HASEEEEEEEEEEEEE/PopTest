@@ -6,13 +6,17 @@ import 'pop_settings.dart';
 
 class DeckPopSettingsNotifier
     extends AutoDisposeFamilyNotifier<DeckPopSettings, String> {
+  late final String _deckId;
+
   @override
-  DeckPopSettings build(String deckId) =>
-      ref.read(appPrefsProvider).loadDeckPopSettings(deckId);
+  DeckPopSettings build(String deckId) {
+    _deckId = deckId;
+    return ref.read(appPrefsProvider).loadDeckPopSettings(deckId);
+  }
 
   Future<void> _persist(DeckPopSettings next) async {
     state = next;
-    await ref.read(appPrefsProvider).setDeckPopSettings(this.arg, next);
+    await ref.read(appPrefsProvider).setDeckPopSettings(_deckId, next);
   }
 
   Future<void> setUseGlobal(bool value) async {

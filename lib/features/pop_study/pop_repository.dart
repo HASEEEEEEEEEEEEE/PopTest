@@ -40,6 +40,8 @@ class DeckData {
 ///
 /// TODO: replace with Drift database in issue #2.
 class DeckRepository extends Notifier<Map<String, DeckData>> {
+  final Map<String, int> _deckCardCounters = {};
+
   @override
   Map<String, DeckData> build() {
     final prefs = ref.read(appPrefsProvider);
@@ -89,8 +91,10 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
   Future<void> addCard(String deckId, String front, String back) async {
     final deck = state[deckId];
     if (deck == null) return;
+    final next = (_deckCardCounters[deckId] ?? _nextCardNumber(deck.cards)) + 1;
+    _deckCardCounters[deckId] = next;
     final newCard = CardModel(
-      id: '${deckId}-${DateTime.now().microsecondsSinceEpoch}',
+      id: '$deckId-custom-$next',
       front: front.trim(),
       back: back.trim(),
       state: CardState.newCard,
@@ -98,6 +102,19 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
     final cards = [...deck.cards, newCard];
     state = Map.of(state)..[deckId] = deck.copyWith(cards: cards);
     await ref.read(appPrefsProvider).setDeckCards(deckId, cards);
+  }
+
+  int _nextCardNumber(List<CardModel> cards) {
+    var maxNumber = 0;
+    for (final card in cards) {
+      final match = RegExp(r'custom-(\d+)$').firstMatch(card.id);
+      if (match == null) continue;
+      final value = int.tryParse(match.group(1) ?? '');
+      if (value != null && value > maxNumber) {
+        maxNumber = value;
+      }
+    }
+    return maxNumber;
   }
 
   Future<void> updateCard(
