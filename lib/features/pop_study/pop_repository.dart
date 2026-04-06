@@ -19,6 +19,18 @@ class DeckData {
     final done = cards.where((c) => c.state == CardState.review).length;
     return done / cards.length;
   }
+
+  DeckData copyWith({
+    String? deckId,
+    String? name,
+    List<CardModel>? cards,
+  }) {
+    return DeckData(
+      deckId: deckId ?? this.deckId,
+      name: name ?? this.name,
+      cards: cards ?? this.cards,
+    );
+  }
 }
 
 /// Deck repository backed by in-memory state + [AppPrefs] persistence.
@@ -31,7 +43,7 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
   @override
   Map<String, DeckData> build() {
     final prefs = ref.read(appPrefsProvider);
-    final initial = _initialDecks();
+    final initial = _initialDecks(prefs);
     // Overlay persisted card states on top of the hard-coded defaults.
     return {
       for (final entry in initial.entries)
@@ -66,6 +78,85 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
         .setCardState(deckId, cardId, updatedCard.state);
   }
 
+  Future<void> renameDeck(String deckId, String newName) async {
+    final deck = state[deckId];
+    if (deck == null) return;
+    final updated = deck.copyWith(name: newName.trim());
+    state = Map.of(state)..[deckId] = updated;
+    await ref.read(appPrefsProvider).setDeckName(deckId, updated.name);
+  }
+
+  Future<void> addCard(String deckId, String front, String back) async {
+    final deck = state[deckId];
+    if (deck == null) return;
+    final next = _maxCustomCardNumber(deck.cards) + 1;
+    final newCard = CardModel(
+      id: '$deckId-custom-$next',
+      front: front.trim(),
+      back: back.trim(),
+      state: CardState.newCard,
+    );
+    final cards = [...deck.cards, newCard];
+    state = Map.of(state)..[deckId] = deck.copyWith(cards: cards);
+    await ref.read(appPrefsProvider).setDeckCards(deckId, cards);
+  }
+
+  int _maxCustomCardNumber(List<CardModel> cards) {
+    var maxNumber = 0;
+    for (final card in cards) {
+      final match = RegExp(r'custom-(\d+)$').firstMatch(card.id);
+      if (match == null) continue;
+      final value = int.tryParse(match.group(1) ?? '');
+      if (value != null && value > maxNumber) {
+        maxNumber = value;
+      }
+    }
+    return maxNumber;
+  }
+
+  Future<void> updateCard(
+    String deckId,
+    String cardId, {
+    String? front,
+    String? back,
+    CardState? stateValue,
+  }) async {
+    final deck = state[deckId];
+    if (deck == null) return;
+    final cards = deck.cards
+        .map((c) => c.id == cardId
+            ? c.copyWith(
+                front: front?.trim() ?? c.front,
+                back: back?.trim() ?? c.back,
+                state: stateValue ?? c.state,
+              )
+            : c)
+        .toList();
+    state = Map.of(state)..[deckId] = deck.copyWith(cards: cards);
+    await ref.read(appPrefsProvider).setDeckCards(deckId, cards);
+  }
+
+  Future<void> deleteCard(String deckId, String cardId) async {
+    final deck = state[deckId];
+    if (deck == null) return;
+    final cards = deck.cards.where((c) => c.id != cardId).toList();
+    state = Map.of(state)..[deckId] = deck.copyWith(cards: cards);
+    await ref.read(appPrefsProvider).setDeckCards(deckId, cards);
+  }
+
+  Future<void> resetCardState(String deckId, String cardId) async {
+    await updateCard(deckId, cardId, stateValue: CardState.newCard);
+  }
+
+  Future<void> resetAllCardStates(String deckId) async {
+    final deck = state[deckId];
+    if (deck == null) return;
+    final cards =
+        deck.cards.map((c) => c.copyWith(state: CardState.newCard)).toList();
+    state = Map.of(state)..[deckId] = deck.copyWith(cards: cards);
+    await ref.read(appPrefsProvider).setDeckCards(deckId, cards);
+  }
+
   // ── Private helpers ────────────────────────────────────────────────────────
 
   DeckData _applyPersistedStates(DeckData deck, AppPrefs prefs) {
@@ -82,8 +173,9 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
     );
   }
 
-  static Map<String, DeckData> _initialDecks() => {
-        '1': DeckData(
+  static Map<String, DeckData> _initialDecks(AppPrefs prefs) {
+    final defaults = <String, DeckData>{
+      '1': DeckData(
           deckId: '1',
           name: '日本語基礎',
           cards: [
@@ -119,7 +211,7 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
                 state: CardState.newCard),
           ],
         ),
-        '2': DeckData(
+      '2': DeckData(
           deckId: '2',
           name: 'JLPT N5 単語',
           cards: [
@@ -150,7 +242,16 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
                 state: CardState.newCard),
           ],
         ),
-      };
+    };
+    return {
+      for (final entry in defaults.entries)
+        entry.key: DeckData(
+          deckId: entry.value.deckId,
+          name: prefs.getDeckName(entry.key) ?? entry.value.name,
+          cards: prefs.getDeckCards(entry.key) ?? entry.value.cards,
+        ),
+    };
+  }
 }
 
 final deckRepositoryProvider =

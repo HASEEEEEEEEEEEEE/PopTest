@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../settings/settings_providers.dart';
 import 'pop_counts.dart';
+import 'deck_pop_settings.dart';
 import 'pop_models.dart';
 import 'pop_repository.dart';
 import 'pop_settings.dart';
@@ -47,7 +48,7 @@ class PopStudyController
   PopStudyState build(String deckId) {
     final repo = ref.read(deckRepositoryProvider.notifier);
     final newLimit = ref.read(newLimitProvider);
-    final popCount = ref.read(popSettingsProvider).popCount;
+    final popCount = ref.read(effectivePopSettingsProvider(deckId)).popCount;
     final deck = repo.getDeck(deckId);
     final queue = buildSessionQueue(
       cards: deck.cards,

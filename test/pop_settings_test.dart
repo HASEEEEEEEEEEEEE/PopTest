@@ -48,6 +48,48 @@ void main() {
     });
   });
 
+  group('DeckPopSettings', () {
+    test('defaults use global settings', () {
+      final s = DeckPopSettings.defaults();
+      expect(s.useGlobal, isTrue);
+      expect(s.services, isEmpty);
+      expect(s.intervalMinutes, PopSettings.defaultIntervalMinutes);
+      expect(s.popCount, PopSettings.defaultPopCount);
+    });
+
+    test('resolve returns global when useGlobal is true', () {
+      final global = PopSettings.defaults().copyWith(
+        services: {PopService.instagram},
+        intervalMinutes: 12,
+        popCount: 5,
+      );
+      final deck = DeckPopSettings.defaults().copyWith(
+        useGlobal: true,
+        services: {PopService.twitter},
+        intervalMinutes: 99,
+        popCount: 9,
+      );
+      final resolved = deck.resolve(global);
+      expect(resolved.services, global.services);
+      expect(resolved.intervalMinutes, global.intervalMinutes);
+      expect(resolved.popCount, global.popCount);
+    });
+
+    test('resolve returns deck overrides when useGlobal is false', () {
+      final global = PopSettings.defaults();
+      final deck = DeckPopSettings.defaults().copyWith(
+        useGlobal: false,
+        services: {PopService.youtube},
+        intervalMinutes: 25,
+        popCount: 6,
+      );
+      final resolved = deck.resolve(global);
+      expect(resolved.services, {PopService.youtube});
+      expect(resolved.intervalMinutes, 25);
+      expect(resolved.popCount, 6);
+    });
+  });
+
   group('AppPrefs – pop settings', () {
     late AppPrefs prefs;
 

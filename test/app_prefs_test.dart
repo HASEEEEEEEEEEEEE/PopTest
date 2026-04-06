@@ -88,5 +88,51 @@ void main() {
       await prefs.setPopStudyActive(false);
       expect(prefs.popStudyActive, isFalse);
     });
+
+    test('deck pop settings round-trip', () async {
+      const deckId = 'd1';
+      final settings = DeckPopSettings(
+        useGlobal: false,
+        services: {PopService.twitter, PopService.youtube},
+        intervalMinutes: 9,
+        popCount: 4,
+      );
+      await prefs.setDeckPopSettings(deckId, settings);
+      final loaded = prefs.loadDeckPopSettings(deckId);
+      expect(loaded.useGlobal, isFalse);
+      expect(loaded.services, {PopService.twitter, PopService.youtube});
+      expect(loaded.intervalMinutes, 9);
+      expect(loaded.popCount, 4);
+    });
+
+    test('deck name round-trip', () async {
+      await prefs.setDeckName('d1', 'My Deck');
+      expect(prefs.getDeckName('d1'), 'My Deck');
+    });
+
+    test('deck cards round-trip', () async {
+      final cards = [
+        const CardModel(
+          id: '1',
+          front: 'a|b',
+          back: r'c\d',
+          state: CardState.learning,
+        ),
+        const CardModel(
+          id: '2',
+          front: 'front2',
+          back: 'back2',
+          state: CardState.review,
+        ),
+      ];
+      await prefs.setDeckCards('d1', cards);
+      final loaded = prefs.getDeckCards('d1');
+      expect(loaded, isNotNull);
+      expect(loaded!.length, 2);
+      expect(loaded[0].front, 'a|b');
+      expect(loaded[0].back, r'c\d');
+      expect(loaded[0].state, CardState.learning);
+      expect(loaded[1].state, CardState.review);
+    });
   });
 }
