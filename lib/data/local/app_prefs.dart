@@ -271,9 +271,12 @@ class AppPrefs {
   static const _keyPopMetricSnoozeCount = 'pop_metric_snooze_count';
   static const _keyPopMetricTrackedEventCount = 'pop_metric_tracked_event_count';
   static const _keyPopMetricMatchedEventCount = 'pop_metric_matched_event_count';
+  static const _keyPopMetricMatchedActiveSeconds =
+      'pop_metric_matched_active_seconds';
   static const _keyPopMetricLastPopupAt = 'pop_metric_last_popup_at';
   static const _keyPopMetricLastStudyStartAt = 'pop_metric_last_study_start_at';
   static const _keyPopMetricSessionStartedAt = 'pop_metric_session_started_at';
+  static const _keyPopMetricLastTrackedAt = 'pop_metric_last_tracked_at';
 
   /// Whether pop-study monitoring mode is currently enabled.
   bool get popStudyActive => _prefs.getBool(_keyPopStudyActive) ?? false;
@@ -288,15 +291,19 @@ class AppPrefs {
     final snooze = _prefs.getInt(_keyPopMetricSnoozeCount) ?? 0;
     final tracked = _prefs.getInt(_keyPopMetricTrackedEventCount) ?? 0;
     final matched = _prefs.getInt(_keyPopMetricMatchedEventCount) ?? 0;
+    final matchedActiveSeconds =
+        _prefs.getInt(_keyPopMetricMatchedActiveSeconds) ?? 0;
     return PopMetrics(
       trackedEventCount: tracked,
       matchedEventCount: matched,
+      matchedActiveSeconds: matchedActiveSeconds,
       popupShownCount: shown,
       popupStartCount: start,
       popupSnoozeCount: snooze,
       lastPopupAt: _readDateTime(_keyPopMetricLastPopupAt),
       lastStudyStartAt: _readDateTime(_keyPopMetricLastStudyStartAt),
       sessionStartedAt: _readDateTime(_keyPopMetricSessionStartedAt),
+      lastTrackedAt: _readDateTime(_keyPopMetricLastTrackedAt),
     );
   }
 
@@ -305,6 +312,8 @@ class AppPrefs {
         _keyPopMetricTrackedEventCount, metrics.trackedEventCount);
     await _prefs.setInt(
         _keyPopMetricMatchedEventCount, metrics.matchedEventCount);
+    await _prefs.setInt(
+        _keyPopMetricMatchedActiveSeconds, metrics.matchedActiveSeconds);
     await _prefs.setInt(_keyPopMetricShownCount, metrics.popupShownCount);
     await _prefs.setInt(_keyPopMetricStartCount, metrics.popupStartCount);
     await _prefs.setInt(_keyPopMetricSnoozeCount, metrics.popupSnoozeCount);
@@ -313,6 +322,7 @@ class AppPrefs {
         _keyPopMetricLastStudyStartAt, metrics.lastStudyStartAt);
     await _writeDateTime(
         _keyPopMetricSessionStartedAt, metrics.sessionStartedAt);
+    await _writeDateTime(_keyPopMetricLastTrackedAt, metrics.lastTrackedAt);
   }
 
   DateTime? _readDateTime(String key) {
