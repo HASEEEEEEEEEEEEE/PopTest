@@ -22,6 +22,9 @@ class HomeScreen extends ConsumerWidget {
     final selectedDeckId = ref.watch(selectedDeckProvider);
     final globalPopSettings = ref.watch(popSettingsProvider);
     final isActive = ref.watch(popStudyActiveProvider);
+    final selectedDeckSettings = selectedDeckId == null
+        ? null
+        : ref.watch(deckPopSettingsProvider(selectedDeckId!));
     final effectivePopSettings = selectedDeckId == null
         ? globalPopSettings
         : ref.watch(effectivePopSettingsProvider(selectedDeckId!));
@@ -131,16 +134,22 @@ class HomeScreen extends ConsumerWidget {
                              children: PopService.values
                                  .map(
                                    (service) => FilterChip(
-                                     label: Text(service.label),
-                                     selected: effectivePopSettings.services
-                                         .contains(service),
-                                     onSelected: selectedDeckId == null
-                                         ? (_) => ref
-                                             .read(popSettingsProvider.notifier)
-                                             .toggleService(service)
-                                         : (_) => ref
-                                             .read(deckPopSettingsProvider(
-                                                     selectedDeckId!)
+                                      label: Text(service.label),
+                                      selected: effectivePopSettings.services
+                                          .contains(service),
+                                      onSelected: selectedDeckId == null
+                                          ? (_) => ref
+                                              .read(popSettingsProvider.notifier)
+                                              .toggleService(service)
+                                          : selectedDeckSettings?.useGlobal ==
+                                                  true
+                                              ? (_) => ref
+                                                  .read(popSettingsProvider
+                                                      .notifier)
+                                                  .toggleService(service)
+                                          : (_) => ref
+                                              .read(deckPopSettingsProvider(
+                                                      selectedDeckId!)
                                                  .notifier)
                                              .toggleService(service),
                                    ),

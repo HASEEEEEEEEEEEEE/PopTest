@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -12,6 +13,8 @@ import '../features/settings/settings_screen.dart';
 import '../features/stats/stats_screen.dart';
 import 'shell_scaffold.dart';
 
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 /// Named route paths used throughout the app.
 abstract final class AppRoutes {
   static const home = '/';
@@ -23,6 +26,7 @@ abstract final class AppRoutes {
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     debugLogDiagnostics: true,
     initialLocation: AppRoutes.home,
     routes: [
