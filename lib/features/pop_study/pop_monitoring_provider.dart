@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -24,23 +22,16 @@ class PopMonitoringManager {
   PopMonitoringManager(this._ref);
 
   final Ref _ref;
-  Timer? _timer;
-  int _lastActivityCount = 0;
   bool _popupOpen = false;
 
   void start() {
-    _timer?.cancel();
-    _lastActivityCount = _ref.read(popActivityProvider);
-    _timer = Timer.periodic(const Duration(seconds: 1), (tickTimer) {
-      if (!tickTimer.isActive) return;
+    _ref.listen<int>(popActivityProvider, (previous, next) {
+      if (previous == next) return;
       _tick();
     });
   }
 
-  void dispose() {
-    _timer?.cancel();
-    _timer = null;
-  }
+  void dispose() {}
 
   Future<void> _tick() async {
     final active = _ref.read(popStudyActiveProvider);
@@ -54,10 +45,6 @@ class PopMonitoringManager {
 
     final location = _readLocation();
     if (location.contains('/pop')) return;
-
-    final activityCount = _ref.read(popActivityProvider);
-    if (activityCount == _lastActivityCount) return;
-    _lastActivityCount = activityCount;
 
     final now = DateTime.now();
     final interval = Duration(minutes: settings.intervalMinutes);

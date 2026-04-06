@@ -143,8 +143,8 @@ class HomeScreen extends ConsumerWidget {
                                           ? (_) => ref
                                               .read(popSettingsProvider.notifier)
                                               .toggleService(service)
-                                          : selectedDeckSettings?.useGlobal ==
-                                                  true
+                                          : selectedDeckSettings?.useGlobal ??
+                                                  false
                                               ? (_) => ref
                                                   .read(popSettingsProvider
                                                       .notifier)
