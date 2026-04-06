@@ -52,3 +52,23 @@ class PopMetricsNotifier extends Notifier<PopMetrics> {
 final popMetricsProvider = NotifierProvider<PopMetricsNotifier, PopMetrics>(
   PopMetricsNotifier.new,
 );
+
+DateTime? computeNextStudyAt(PopMetrics metrics, Duration interval) {
+  final sessionStartedAt = metrics.sessionStartedAt;
+  if (sessionStartedAt == null) return null;
+  final baseline = metrics.lastStudyStartAt != null &&
+          metrics.lastStudyStartAt!.isAfter(sessionStartedAt)
+      ? metrics.lastStudyStartAt!
+      : sessionStartedAt;
+  return baseline.add(interval);
+}
+
+bool hasReachedNextStudyTime(
+  PopMetrics metrics,
+  Duration interval,
+  DateTime now,
+) {
+  final next = computeNextStudyAt(metrics, interval);
+  if (next == null) return false;
+  return !now.isBefore(next);
+}

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../pop_study/pop_models.dart';
 import '../pop_study/pop_metrics.dart';
+import '../pop_study/pop_metrics_model.dart';
 import '../pop_study/deck_pop_settings.dart';
 import '../pop_study/pop_repository.dart';
 import '../pop_study/pop_settings.dart';
@@ -44,12 +45,13 @@ class HomeScreen extends ConsumerWidget {
             ? selectedDeck.name
             : null;
 
-    final canStart =
-        selectedDeckId != null && effectivePopSettings.services.isNotEmpty;
+    final hasTargets = effectivePopSettings.services.isNotEmpty ||
+        effectivePopSettings.customUrls.isNotEmpty;
+    final canStart = selectedDeckId != null && hasTargets;
 
     final intervalDuration =
         Duration(minutes: effectivePopSettings.intervalMinutes);
-    final nextStudyAt = _computeNextStudyAt(metrics, intervalDuration);
+    final nextStudyAt = computeNextStudyAt(metrics, intervalDuration);
     final nextStudyLabel = nextStudyAt == null
         ? '未定'
         : '${nextStudyAt.month}/${nextStudyAt.day} ${nextStudyAt.hour.toString().padLeft(2, '0')}:${nextStudyAt.minute.toString().padLeft(2, '0')}';
@@ -154,13 +156,13 @@ class HomeScreen extends ConsumerWidget {
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           const SizedBox(height: 8),
-                           Wrap(
-                             spacing: 8,
-                             runSpacing: 4,
-                             children: PopService.values
-                                 .map(
-                                   (service) => FilterChip(
-                                      label: Text(service.label),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: PopService.values
+                                  .map(
+                                    (service) => FilterChip(
+                                       label: Text(service.label),
                                       selected: effectivePopSettings.services
                                           .contains(service),
                                       onSelected: !hasSelectedDeck
@@ -177,45 +179,45 @@ class HomeScreen extends ConsumerWidget {
                                                       selectedDeckIdOrEmpty)
                                                   .notifier)
                                               .toggleService(service),
-                                   ),
-                                 )
-                                 .toList(),
-                            ),
-                            const SizedBox(height: 8),
-                            _CustomUrlSection(
-                              urls: effectivePopSettings.customUrls,
-                              onAdd: (url) {
-                                if (!hasSelectedDeck || useGlobalSettings) {
-                                  ref
-                                      .read(popSettingsProvider.notifier)
-                                      .addCustomUrl(url);
-                                  return;
-                                }
+                                    ),
+                                  )
+                                  .toList(),
+                          ),
+                          const SizedBox(height: 8),
+                          _CustomUrlSection(
+                            urls: effectivePopSettings.customUrls,
+                            onAdd: (url) {
+                              if (!hasSelectedDeck || useGlobalSettings) {
                                 ref
-                                    .read(deckPopSettingsProvider(
-                                            selectedDeckIdOrEmpty)
-                                        .notifier)
+                                    .read(popSettingsProvider.notifier)
                                     .addCustomUrl(url);
-                              },
-                              onRemove: (url) {
-                                if (!hasSelectedDeck || useGlobalSettings) {
-                                  ref
-                                      .read(popSettingsProvider.notifier)
-                                      .removeCustomUrl(url);
-                                  return;
-                                }
+                                return;
+                              }
+                              ref
+                                  .read(deckPopSettingsProvider(
+                                          selectedDeckIdOrEmpty)
+                                      .notifier)
+                                  .addCustomUrl(url);
+                            },
+                            onRemove: (url) {
+                              if (!hasSelectedDeck || useGlobalSettings) {
                                 ref
-                                    .read(deckPopSettingsProvider(
-                                            selectedDeckIdOrEmpty)
-                                        .notifier)
+                                    .read(popSettingsProvider.notifier)
                                     .removeCustomUrl(url);
-                              },
-                            ),
-                            if (effectivePopSettings.services.isEmpty)
-                             Padding(
-                               padding: const EdgeInsets.only(top: 6),
+                                return;
+                              }
+                              ref
+                                  .read(deckPopSettingsProvider(
+                                          selectedDeckIdOrEmpty)
+                                      .notifier)
+                                  .removeCustomUrl(url);
+                            },
+                          ),
+                          if (!hasTargets)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
                               child: Text(
-                                'サービス未選択：ポップ学習を開始できません',
+                                'サービス/URL未指定：ポップ学習を開始できません',
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodySmall
@@ -421,14 +423,4 @@ class _MetricCard extends StatelessWidget {
       ),
     );
   }
-}
-
-DateTime? _computeNextStudyAt(PopMetrics metrics, Duration interval) {
-  final sessionStartedAt = metrics.sessionStartedAt;
-  if (sessionStartedAt == null) return null;
-  final baseline =
-      metrics.lastStudyStartAt != null && metrics.lastStudyStartAt!.isAfter(sessionStartedAt)
-          ? metrics.lastStudyStartAt!
-          : sessionStartedAt;
-  return baseline.add(interval);
 }

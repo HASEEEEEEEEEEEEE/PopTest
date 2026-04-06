@@ -55,13 +55,14 @@ class PopMonitoringManager {
     if (!hasTargets) return;
     final uri = _readLocationUri();
     final serviceMatched = settings.services.isNotEmpty &&
-        _isServiceMatchedByPath(uri.path, settings.services);
+        _isServiceMatched(uri, settings.services);
     final urlMatched = settings.customUrls.isNotEmpty &&
         _isCustomUrlMatched(uri.toString(), settings.customUrls);
     final matchedTarget = serviceMatched || urlMatched;
     await _ref
         .read(popMetricsProvider.notifier)
         .recordTrackedEvent(matchedTarget: matchedTarget);
+    if (!matchedTarget) return;
     final locationPath = uri.path;
     final popPath = '/decks/$deckId/pop';
     if (locationPath == popPath) return;
@@ -69,13 +70,7 @@ class PopMonitoringManager {
     final now = DateTime.now();
     final interval = Duration(minutes: settings.intervalMinutes);
     final metrics = _ref.read(popMetricsProvider);
-    final sessionStartedAt = metrics.sessionStartedAt;
-    if (sessionStartedAt == null) return;
-    final baseline =
-        metrics.lastStudyStartAt != null && metrics.lastStudyStartAt!.isAfter(sessionStartedAt)
-            ? metrics.lastStudyStartAt!
-            : sessionStartedAt;
-    if (now.difference(baseline) < interval) {
+    if (!hasReachedNextStudyTime(metrics, interval, now)) {
       return;
     }
 
@@ -124,16 +119,49 @@ class PopMonitoringManager {
     return router.routeInformationProvider.value.uri;
   }
 
-  bool _isServiceMatchedByPath(String path, Set<PopService> services) {
-    final lower = path.toLowerCase();
+  bool _isServiceMatched(Uri uri, Set<PopService> services) {
+    final host = uri.host.toLowerCase();
+    final path = uri.path.toLowerCase();
+    final full = uri.toString().toLowerCase();
     for (final service in services) {
-      final name = service.name.toLowerCase();
-      if (lower.contains(name)) return true;
-      if (name == 'twitter' && (lower.contains('x') || lower.contains('tweet'))) {
+      if (_matchesService(service, host: host, path: path, full: full)) {
         return true;
       }
     }
     return false;
+  }
+
+  bool _matchesService(
+    PopService service, {
+    required String host,
+    required String path,
+    required String full,
+  }) {
+    switch (service) {
+      case PopService.twitter:
+        return host == 'x.com' ||
+            host.endsWith('.x.com') ||
+            host == 'twitter.com' ||
+            host.endsWith('.twitter.com') ||
+            path.contains('/tweet') ||
+            path.contains('/tweets') ||
+            full.contains('://x.com/') ||
+            full.contains('://twitter.com/');
+      case PopService.instagram:
+        return host == 'instagram.com' ||
+            host.endsWith('.instagram.com') ||
+            full.contains('://instagram.com/');
+      case PopService.youtube:
+        return host == 'youtube.com' ||
+            host.endsWith('.youtube.com') ||
+            host == 'youtu.be' ||
+            full.contains('://youtube.com/') ||
+            full.contains('://youtu.be/');
+      case PopService.tiktok:
+        return host == 'tiktok.com' ||
+            host.endsWith('.tiktok.com') ||
+            full.contains('://tiktok.com/');
+    }
   }
 
   bool _isCustomUrlMatched(String url, Set<String> patterns) {
@@ -147,10 +175,6 @@ class PopMonitoringManager {
 
 final popMonitoringProvider = Provider<PopMonitoringManager>((ref) {
   final manager = PopMonitoringManager(ref);
-  if (ref.read(popStudyActiveProvider) &&
-      ref.read(popMetricsProvider).sessionStartedAt == null) {
-    ref.read(popMetricsProvider.notifier).startSession(DateTime.now());
-  }
   ref.listen<bool>(popStudyActiveProvider, (previous, next) {
     final metrics = ref.read(popMetricsProvider.notifier);
     if (next && previous != true) {
@@ -158,7 +182,7 @@ final popMonitoringProvider = Provider<PopMonitoringManager>((ref) {
     } else if (!next && previous == true) {
       metrics.stopSession();
     }
-  });
+  }, fireImmediately: true);
   manager.start();
   ref.onDispose(manager.dispose);
   return manager;

@@ -10,6 +10,7 @@ void main() {
     test('defaults have correct values', () {
       final s = PopSettings.defaults();
       expect(s.services, isEmpty);
+      expect(s.customUrls, isEmpty);
       expect(s.intervalMinutes, PopSettings.defaultIntervalMinutes);
       expect(s.popCount, PopSettings.defaultPopCount);
     });
@@ -18,6 +19,7 @@ void main() {
       final s = PopSettings.defaults()
           .copyWith(services: {PopService.twitter}, intervalMinutes: 15, popCount: 5);
       expect(s.services, {PopService.twitter});
+      expect(s.customUrls, isEmpty);
       expect(s.intervalMinutes, 15);
       expect(s.popCount, 5);
     });
@@ -53,6 +55,7 @@ void main() {
       final s = DeckPopSettings.defaults();
       expect(s.useGlobal, isTrue);
       expect(s.services, isEmpty);
+      expect(s.customUrls, isEmpty);
       expect(s.intervalMinutes, PopSettings.defaultIntervalMinutes);
       expect(s.popCount, PopSettings.defaultPopCount);
     });
@@ -71,6 +74,7 @@ void main() {
       );
       final resolved = deck.resolve(global);
       expect(resolved.services, global.services);
+      expect(resolved.customUrls, global.customUrls);
       expect(resolved.intervalMinutes, global.intervalMinutes);
       expect(resolved.popCount, global.popCount);
     });
@@ -85,6 +89,7 @@ void main() {
       );
       final resolved = deck.resolve(global);
       expect(resolved.services, {PopService.youtube});
+      expect(resolved.customUrls, isEmpty);
       expect(resolved.intervalMinutes, 25);
       expect(resolved.popCount, 6);
     });
@@ -102,6 +107,7 @@ void main() {
     test('loadPopSettings returns defaults when nothing is stored', () {
       final s = prefs.loadPopSettings();
       expect(s.services, isEmpty);
+      expect(s.customUrls, isEmpty);
       expect(s.intervalMinutes, PopSettings.defaultIntervalMinutes);
       expect(s.popCount, PopSettings.defaultPopCount);
     });
@@ -128,6 +134,12 @@ void main() {
     test('setPopCount / loadPopSettings round-trip', () async {
       await prefs.setPopCount(7);
       expect(prefs.loadPopSettings().popCount, 7);
+    });
+
+    test('setPopCustomUrls / loadPopSettings round-trip', () async {
+      await prefs.setPopCustomUrls({'youtube.com', 'x.com/home'});
+      final s = prefs.loadPopSettings();
+      expect(s.customUrls, {'youtube.com', 'x.com/home'});
     });
 
     test('persisted out-of-range values are clamped on load', () async {

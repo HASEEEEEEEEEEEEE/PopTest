@@ -16,10 +16,10 @@ The app uses **go_router** with a `StatefulShellRoute` to implement a persistent
 
 | Tab | Path | Description |
 |---|---|---|
-| ホーム | `/` | Dashboard – today's stats placeholders |
+| ホーム | `/` | Dashboard – ポップ統計、サービス/URL対象、学習中ステータス |
 | デッキ | `/decks` | Deck list; `/decks/:deckId` opens a deck; `/decks/:deckId/pop` starts a study session |
 | レビュー | `/review` | Manual / interrupt study (stub) |
-| 設定 | `/settings` | App settings (newLimit +/- control) |
+| 設定 | `/settings` | 保存ボタンで確定する設定画面 |
 | 統計 | `/stats` | Stats overview (stub) |
 
 URL updates on every navigation. The system back button works correctly within each branch. Each branch preserves its own navigation stack thanks to `StatefulShellRoute.indexedStack`.
@@ -45,7 +45,8 @@ The screen shows both **session-remaining** and **deck-total** breakdowns by sta
 ### Pop monitoring behavior
 
 - Homeで「ポップ学習を開始」をONにすると、アプリ内のユーザー操作（タップ）を監視します。
-- 対象SNSが1つ以上選択されている状態で、設定した間隔が経過し、かつ操作を検知したタイミングでポップ出題ダイアログを表示します。
+- 対象SNSまたは対象URLが1つ以上設定され、現在URLが一致している状態で、設定した間隔が経過したタイミング（初回は開始時刻+間隔）にポップ出題ダイアログを表示します。
+- 学習中に間隔を変更した場合も、前回学習からの経過時間は維持され、次回判定から新しい間隔を適用します。
 - ダイアログの「開始」で `/decks/:deckId/pop` の学習セッションを開きます。
 
 ## Data model (in-memory)

@@ -94,6 +94,7 @@ void main() {
       final settings = DeckPopSettings(
         useGlobal: false,
         services: {PopService.twitter, PopService.youtube},
+        customUrls: {'youtube.com/shorts'},
         intervalMinutes: 9,
         popCount: 4,
       );
@@ -101,6 +102,7 @@ void main() {
       final loaded = prefs.loadDeckPopSettings(deckId);
       expect(loaded.useGlobal, isFalse);
       expect(loaded.services, {PopService.twitter, PopService.youtube});
+      expect(loaded.customUrls, {'youtube.com/shorts'});
       expect(loaded.intervalMinutes, 9);
       expect(loaded.popCount, 4);
     });
