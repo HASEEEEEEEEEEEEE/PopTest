@@ -2,17 +2,44 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../pop_study/pop_models.dart';
+import '../pop_study/pop_study_active_provider.dart';
 import '../pop_study/pop_settings.dart';
 import 'settings_providers.dart';
 
-/// Settings screen with adjustable session parameters.
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  int _newLimit = 20;
+  int _intervalMinutes = PopSettings.defaultIntervalMinutes;
+  int _popCount = PopSettings.defaultPopCount;
+  bool _isDirty = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final newLimit = ref.read(newLimitProvider);
+    final popSettings = ref.read(popSettingsProvider);
+    _newLimit = newLimit;
+    _intervalMinutes = popSettings.intervalMinutes;
+    _popCount = popSettings.popCount;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final newLimit = ref.watch(newLimitProvider);
     final popSettings = ref.watch(popSettingsProvider);
+    final isActive = ref.watch(popStudyActiveProvider);
+
+    if (!_isDirty) {
+      _newLimit = newLimit;
+      _intervalMinutes = popSettings.intervalMinutes;
+      _popCount = popSettings.popCount;
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('設定')),
@@ -20,7 +47,6 @@ class SettingsScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         physics: const ClampingScrollPhysics(),
         children: [
-          // ── 通常学習 ──────────────────────────────────────────────────────
           Text('通常学習', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(
@@ -42,37 +68,35 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   IconButton(
                     icon: const Icon(Icons.remove),
-                    onPressed: newLimit > 1
-                        ? () => ref
-                            .read(newLimitProvider.notifier)
-                            .state = newLimit - 1
+                    onPressed: _newLimit > 1
+                        ? () => setState(() {
+                              _newLimit -= 1;
+                              _isDirty = true;
+                            })
                         : null,
                   ),
                   SizedBox(
                     width: 36,
                     child: Text(
-                      '$newLimit',
+                      '$_newLimit',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.add),
-                    onPressed: () => ref
-                        .read(newLimitProvider.notifier)
-                        .state = newLimit + 1,
+                    onPressed: () => setState(() {
+                      _newLimit += 1;
+                      _isDirty = true;
+                    }),
                   ),
                 ],
               ),
             ),
           ),
-
-          // ── ポップ学習 ────────────────────────────────────────────────────
           const SizedBox(height: 24),
           Text('ポップ学習', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-
-          // 出題頻度
           Card(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -92,30 +116,28 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   IconButton(
                     icon: const Icon(Icons.remove),
-                    onPressed: popSettings.intervalMinutes >
-                            PopSettings.minIntervalMinutes
-                        ? () => ref
-                            .read(popSettingsProvider.notifier)
-                            .setIntervalMinutes(
-                                popSettings.intervalMinutes - 1)
+                    onPressed: _intervalMinutes > PopSettings.minIntervalMinutes
+                        ? () => setState(() {
+                              _intervalMinutes -= 1;
+                              _isDirty = true;
+                            })
                         : null,
                   ),
                   SizedBox(
                     width: 40,
                     child: Text(
-                      '${popSettings.intervalMinutes}',
+                      '$_intervalMinutes',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.add),
-                    onPressed: popSettings.intervalMinutes <
-                            PopSettings.maxIntervalMinutes
-                        ? () => ref
-                            .read(popSettingsProvider.notifier)
-                            .setIntervalMinutes(
-                                popSettings.intervalMinutes + 1)
+                    onPressed: _intervalMinutes < PopSettings.maxIntervalMinutes
+                        ? () => setState(() {
+                              _intervalMinutes += 1;
+                              _isDirty = true;
+                            })
                         : null,
                   ),
                 ],
@@ -123,8 +145,6 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 8),
-
-          // 1回の問題数
           Card(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -144,33 +164,74 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   IconButton(
                     icon: const Icon(Icons.remove),
-                    onPressed:
-                        popSettings.popCount > PopSettings.minPopCount
-                            ? () => ref
-                                .read(popSettingsProvider.notifier)
-                                .setPopCount(popSettings.popCount - 1)
-                            : null,
+                    onPressed: _popCount > PopSettings.minPopCount
+                        ? () => setState(() {
+                              _popCount -= 1;
+                              _isDirty = true;
+                            })
+                        : null,
                   ),
                   SizedBox(
                     width: 36,
                     child: Text(
-                      '${popSettings.popCount}',
+                      '$_popCount',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.add),
-                    onPressed:
-                        popSettings.popCount < PopSettings.maxPopCount
-                            ? () => ref
-                                .read(popSettingsProvider.notifier)
-                                .setPopCount(popSettings.popCount + 1)
-                            : null,
+                    onPressed: _popCount < PopSettings.maxPopCount
+                        ? () => setState(() {
+                              _popCount += 1;
+                              _isDirty = true;
+                            })
+                        : null,
                   ),
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: () async {
+              final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('設定を保存しますか？'),
+                      content: Text(
+                        isActive
+                            ? '学習中です。前回学習からの経過時間は維持したまま、以後は新しい間隔（$_intervalMinutes 分）を適用します。'
+                            : '変更内容を保存します。',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: const Text('キャンセル'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          child: const Text('保存'),
+                        ),
+                      ],
+                    ),
+                  ) ??
+                  false;
+              if (!ok) return;
+
+              ref.read(newLimitProvider.notifier).state = _newLimit;
+              await ref
+                  .read(popSettingsProvider.notifier)
+                  .setIntervalMinutes(_intervalMinutes);
+              await ref.read(popSettingsProvider.notifier).setPopCount(_popCount);
+              _isDirty = false;
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('設定を保存しました')),
+              );
+            },
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('保存'),
           ),
         ],
       ),
