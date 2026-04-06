@@ -42,6 +42,12 @@ The screen shows both **session-remaining** and **deck-total** breakdowns by sta
 
 **Solve-to-dismiss**: leaving the Pop Study screen while cards remain triggers a confirmation dialog.
 
+### Pop monitoring behavior
+
+- Homeで「ポップ学習を開始」をONにすると、アプリ内のユーザー操作（タップ）を監視します。
+- 対象SNSが1つ以上選択されている状態で、設定した間隔が経過し、かつ操作を検知したタイミングでポップ出題ダイアログを表示します。
+- ダイアログの「開始」で `/decks/:deckId/pop` の学習セッションを開きます。
+
 ## Data model (in-memory)
 
 ```dart
@@ -72,7 +78,8 @@ lib/
 │   │   ├── pop_repository.dart  # In-memory DeckRepository + Riverpod provider
 │   │   ├── pop_counts.dart      # Count helpers + session queue builder
 │   │   ├── pop_study_controller.dart  # Session state notifier (Again/Good)
-│   │   └── pop_study_screen.dart      # Pop Study UI
+│   │   ├── pop_study_screen.dart      # Pop Study UI
+│   │   └── pop_monitoring_provider.dart # User activity monitoring + popup trigger
 │   ├── review/
 │   │   └── review_screen.dart   # Manual review (stub)
 │   ├── settings/

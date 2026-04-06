@@ -22,9 +22,16 @@ class HomeScreen extends ConsumerWidget {
     final selectedDeckId = ref.watch(selectedDeckProvider);
     final globalPopSettings = ref.watch(popSettingsProvider);
     final isActive = ref.watch(popStudyActiveProvider);
-    final effectivePopSettings = selectedDeckId == null
+    final selectedDeckIdOrEmpty = selectedDeckId ?? '';
+    final hasSelectedDeck = selectedDeckId != null;
+    final selectedDeckSettings = !hasSelectedDeck
+        ? null
+        : ref.watch(deckPopSettingsProvider(selectedDeckIdOrEmpty));
+    final useGlobalSettings =
+        !hasSelectedDeck || (selectedDeckSettings?.useGlobal ?? true);
+    final effectivePopSettings = !hasSelectedDeck
         ? globalPopSettings
-        : ref.watch(effectivePopSettingsProvider(selectedDeckId!));
+        : ref.watch(effectivePopSettingsProvider(selectedDeckIdOrEmpty));
 
     final selectedDeck = decks.firstWhere(
       (d) => d.deckId == selectedDeckId,
@@ -131,18 +138,23 @@ class HomeScreen extends ConsumerWidget {
                              children: PopService.values
                                  .map(
                                    (service) => FilterChip(
-                                     label: Text(service.label),
-                                     selected: effectivePopSettings.services
-                                         .contains(service),
-                                     onSelected: selectedDeckId == null
-                                         ? (_) => ref
-                                             .read(popSettingsProvider.notifier)
-                                             .toggleService(service)
-                                         : (_) => ref
-                                             .read(deckPopSettingsProvider(
-                                                     selectedDeckId!)
-                                                 .notifier)
-                                             .toggleService(service),
+                                      label: Text(service.label),
+                                      selected: effectivePopSettings.services
+                                          .contains(service),
+                                      onSelected: !hasSelectedDeck
+                                          ? (_) => ref
+                                              .read(popSettingsProvider.notifier)
+                                              .toggleService(service)
+                                          : useGlobalSettings
+                                              ? (_) => ref
+                                                  .read(popSettingsProvider
+                                                      .notifier)
+                                                  .toggleService(service)
+                                          : (_) => ref
+                                              .read(deckPopSettingsProvider(
+                                                      selectedDeckIdOrEmpty)
+                                                  .notifier)
+                                              .toggleService(service),
                                    ),
                                  )
                                  .toList(),
