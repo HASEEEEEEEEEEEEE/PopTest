@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -23,15 +25,20 @@ class PopMonitoringManager {
 
   final Ref _ref;
   bool _popupOpen = false;
+  Timer? _debounceTimer;
 
   void start() {
     _ref.listen<int>(popActivityProvider, (previous, next) {
       if (previous == next) return;
-      _tick();
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(const Duration(milliseconds: 400), _tick);
     });
   }
 
-  void dispose() {}
+  void dispose() {
+    _debounceTimer?.cancel();
+    _debounceTimer = null;
+  }
 
   Future<void> _tick() async {
     final active = _ref.read(popStudyActiveProvider);
@@ -43,8 +50,9 @@ class PopMonitoringManager {
     final settings = _ref.read(effectivePopSettingsProvider(deckId));
     if (settings.services.isEmpty) return;
 
-    final location = _readLocation();
-    if (location.contains('/pop')) return;
+    final locationPath = _readLocationPath();
+    final popPath = '/decks/$deckId/pop';
+    if (locationPath == popPath) return;
 
     final now = DateTime.now();
     final interval = Duration(minutes: settings.intervalMinutes);
@@ -87,15 +95,15 @@ class PopMonitoringManager {
     _popupOpen = false;
   }
 
-  String _readLocation() {
+  String _readLocationPath() {
     final router = _ref.read(routerProvider);
-    return router.routeInformationProvider.value.uri.toString();
+    return router.routeInformationProvider.value.uri.path;
   }
 }
 
 final _lastPopupAtProvider = StateProvider<DateTime?>((ref) => null);
 
-final popMonitoringProvider = Provider<void>((ref) {
+final popMonitoringProvider = Provider<PopMonitoringManager>((ref) {
   final manager = PopMonitoringManager(ref);
   ref.listen<bool>(popStudyActiveProvider, (previous, next) {
     if (!next) {
@@ -104,4 +112,5 @@ final popMonitoringProvider = Provider<void>((ref) {
   });
   manager.start();
   ref.onDispose(manager.dispose);
+  return manager;
 });
