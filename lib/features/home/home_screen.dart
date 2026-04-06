@@ -10,6 +10,14 @@ import '../pop_study/pop_settings.dart';
 import '../pop_study/pop_study_active_provider.dart';
 import 'selected_deck_provider.dart';
 
+final nowTickerProvider = StreamProvider.autoDispose<DateTime>((ref) async* {
+  yield DateTime.now();
+  yield* Stream<DateTime>.periodic(
+    const Duration(seconds: 1),
+    (_) => DateTime.now(),
+  );
+});
+
 /// Home / Dashboard screen.
 ///
 /// Displays today's study metrics, a deck selector, service selection chips,
@@ -25,6 +33,7 @@ class HomeScreen extends ConsumerWidget {
     final globalPopSettings = ref.watch(popSettingsProvider);
     final isActive = ref.watch(popStudyActiveProvider);
     final metrics = ref.watch(popMetricsProvider);
+    final now = ref.watch(nowTickerProvider).value ?? DateTime.now();
     final selectedDeckIdOrEmpty = selectedDeckId ?? '';
     final hasSelectedDeck = selectedDeckId != null;
     final selectedDeckSettings = !hasSelectedDeck
@@ -52,9 +61,12 @@ class HomeScreen extends ConsumerWidget {
     final intervalDuration =
         Duration(minutes: effectivePopSettings.intervalMinutes);
     final nextStudyAt = computeNextStudyAt(metrics, intervalDuration);
-    final nextStudyLabel = nextStudyAt == null
-        ? '未定'
-        : '${nextStudyAt.month}/${nextStudyAt.day} ${nextStudyAt.hour.toString().padLeft(2, '0')}:${nextStudyAt.minute.toString().padLeft(2, '0')}';
+    final countdownLabel = nextStudyAt == null
+        ? '--:--'
+        : formatDurationAsMinutesSeconds(nextStudyAt.difference(now));
+    final watchedLabel = formatDurationAsMinutesSeconds(
+      Duration(seconds: metrics.matchedActiveSeconds),
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('ホーム')),
@@ -66,7 +78,7 @@ class HomeScreen extends ConsumerWidget {
             _PopStudyStatusBar(
               deckName: deckName,
               questionsPerPopup: effectivePopSettings.popCount,
-              nextStudyLabel: nextStudyLabel,
+              nextStudyCountdownLabel: countdownLabel,
             ),
 
           // ── Main content ───────────────────────────────────────────────
@@ -108,6 +120,12 @@ class HomeScreen extends ConsumerWidget {
                     value: '${metrics.matchedEventCount}',
                     icon: Icons.link_outlined,
                     color: colorScheme.surfaceContainer,
+                  ),
+                  _MetricCard(
+                    label: '対象サービス視聴時間',
+                    value: watchedLabel,
+                    icon: Icons.timer_outlined,
+                    color: colorScheme.surfaceContainerLow,
                   ),
 
                   // ── Pop study settings ─────────────────────────────────
@@ -286,12 +304,12 @@ class _PopStudyStatusBar extends StatelessWidget {
   const _PopStudyStatusBar({
     required this.deckName,
     required this.questionsPerPopup,
-    required this.nextStudyLabel,
+    required this.nextStudyCountdownLabel,
   });
 
   final String? deckName;
   final int questionsPerPopup;
-  final String nextStudyLabel;
+  final String nextStudyCountdownLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -311,7 +329,7 @@ class _PopStudyStatusBar extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              '$label / 次回: $nextStudyLabel',
+              '$label / 次回まで: $nextStudyCountdownLabel',
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium

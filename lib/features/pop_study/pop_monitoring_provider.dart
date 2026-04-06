@@ -54,20 +54,21 @@ class PopMonitoringManager {
         settings.services.isNotEmpty || settings.customUrls.isNotEmpty;
     if (!hasTargets) return;
     final uri = _readLocationUri();
+    final hasWebContext = uri.host.isNotEmpty;
     final serviceMatched = settings.services.isNotEmpty &&
-        _isServiceMatched(uri, settings.services);
+        (_isServiceMatched(uri, settings.services) || !hasWebContext);
     final urlMatched = settings.customUrls.isNotEmpty &&
         _isCustomUrlMatched(uri.toString(), settings.customUrls);
     final matchedTarget = serviceMatched || urlMatched;
+    final now = DateTime.now();
     await _ref
         .read(popMetricsProvider.notifier)
-        .recordTrackedEvent(matchedTarget: matchedTarget);
+        .recordTrackedEvent(matchedTarget: matchedTarget, at: now);
     if (!matchedTarget) return;
     final locationPath = uri.path;
     final popPath = '/decks/$deckId/pop';
     if (locationPath == popPath) return;
 
-    final now = DateTime.now();
     final interval = Duration(minutes: settings.intervalMinutes);
     final metrics = _ref.read(popMetricsProvider);
     if (!hasReachedNextStudyTime(metrics, interval, now)) {
