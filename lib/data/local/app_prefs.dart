@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/pop_study/pop_models.dart';
+import '../../features/pop_study/pop_metrics_model.dart';
 
 /// Thin wrapper around [SharedPreferences] for app-level persistence.
 ///
@@ -78,10 +79,12 @@ class AppPrefs {
   // ── Pop-study settings ─────────────────────────────────────────────────────
 
   static const _keyPopServices = 'pop_services';
+  static const _keyPopCustomUrls = 'pop_custom_urls';
   static const _keyPopIntervalMinutes = 'pop_interval_minutes';
   static const _keyPopCount = 'pop_count';
   static const _prefixDeckPopUseGlobal = 'deck_pop_use_global_';
   static const _prefixDeckPopServices = 'deck_pop_services_';
+  static const _prefixDeckPopCustomUrls = 'deck_pop_custom_urls_';
   static const _prefixDeckPopIntervalMinutes = 'deck_pop_interval_minutes_';
   static const _prefixDeckPopCount = 'deck_pop_count_';
   static const _prefixDeckName = 'deck_name_';
@@ -102,9 +105,14 @@ class AppPrefs {
         PopSettings.defaultIntervalMinutes;
     final popCount =
         _prefs.getInt(_keyPopCount) ?? PopSettings.defaultPopCount;
+    final customUrls = _prefs.getStringList(_keyPopCustomUrls) ?? const <String>[];
 
     return PopSettings(
       services: services,
+      customUrls: customUrls
+          .map((url) => url.trim())
+          .where((url) => url.isNotEmpty)
+          .toSet(),
       intervalMinutes: intervalMinutes.clamp(
           PopSettings.minIntervalMinutes, PopSettings.maxIntervalMinutes),
       popCount:
@@ -119,6 +127,17 @@ class AppPrefs {
       await _prefs.setString(
           _keyPopServices, services.map(_serializePopService).join(','));
     }
+  }
+
+  Future<void> setPopCustomUrls(Set<String> customUrls) async {
+    if (customUrls.isEmpty) {
+      await _prefs.remove(_keyPopCustomUrls);
+      return;
+    }
+    await _prefs.setStringList(
+      _keyPopCustomUrls,
+      customUrls.map((url) => url.trim()).where((url) => url.isNotEmpty).toList(),
+    );
   }
 
   Future<void> setPopIntervalMinutes(int minutes) async {
@@ -139,6 +158,8 @@ class AppPrefs {
             .map(_parsePopService)
             .whereType<PopService>()
             .toSet();
+    final customUrls =
+        _prefs.getStringList('$_prefixDeckPopCustomUrls$deckId') ?? const <String>[];
     final intervalMinutes = _prefs.getInt('$_prefixDeckPopIntervalMinutes$deckId') ??
         PopSettings.defaultIntervalMinutes;
     final popCount =
@@ -147,6 +168,10 @@ class AppPrefs {
     return DeckPopSettings(
       useGlobal: useGlobal,
       services: services,
+      customUrls: customUrls
+          .map((url) => url.trim())
+          .where((url) => url.isNotEmpty)
+          .toSet(),
       intervalMinutes: intervalMinutes.clamp(
           PopSettings.minIntervalMinutes, PopSettings.maxIntervalMinutes),
       popCount:
@@ -161,6 +186,17 @@ class AppPrefs {
     } else {
       await _prefs.setString('$_prefixDeckPopServices$deckId',
           settings.services.map(_serializePopService).join(','));
+    }
+    if (settings.customUrls.isEmpty) {
+      await _prefs.remove('$_prefixDeckPopCustomUrls$deckId');
+    } else {
+      await _prefs.setStringList(
+        '$_prefixDeckPopCustomUrls$deckId',
+        settings.customUrls
+            .map((url) => url.trim())
+            .where((url) => url.isNotEmpty)
+            .toList(),
+      );
     }
     await _prefs.setInt(
         '$_prefixDeckPopIntervalMinutes$deckId', settings.intervalMinutes);
@@ -230,12 +266,67 @@ class AppPrefs {
   // ── Pop-study active state ─────────────────────────────────────────────────
 
   static const _keyPopStudyActive = 'pop_study_active';
+  static const _keyPopMetricShownCount = 'pop_metric_shown_count';
+  static const _keyPopMetricStartCount = 'pop_metric_start_count';
+  static const _keyPopMetricSnoozeCount = 'pop_metric_snooze_count';
+  static const _keyPopMetricTrackedEventCount = 'pop_metric_tracked_event_count';
+  static const _keyPopMetricMatchedEventCount = 'pop_metric_matched_event_count';
+  static const _keyPopMetricLastPopupAt = 'pop_metric_last_popup_at';
+  static const _keyPopMetricLastStudyStartAt = 'pop_metric_last_study_start_at';
+  static const _keyPopMetricSessionStartedAt = 'pop_metric_session_started_at';
 
   /// Whether pop-study monitoring mode is currently enabled.
   bool get popStudyActive => _prefs.getBool(_keyPopStudyActive) ?? false;
 
   Future<void> setPopStudyActive(bool active) async {
     await _prefs.setBool(_keyPopStudyActive, active);
+  }
+
+  PopMetrics loadPopMetrics() {
+    final shown = _prefs.getInt(_keyPopMetricShownCount) ?? 0;
+    final start = _prefs.getInt(_keyPopMetricStartCount) ?? 0;
+    final snooze = _prefs.getInt(_keyPopMetricSnoozeCount) ?? 0;
+    final tracked = _prefs.getInt(_keyPopMetricTrackedEventCount) ?? 0;
+    final matched = _prefs.getInt(_keyPopMetricMatchedEventCount) ?? 0;
+    return PopMetrics(
+      trackedEventCount: tracked,
+      matchedEventCount: matched,
+      popupShownCount: shown,
+      popupStartCount: start,
+      popupSnoozeCount: snooze,
+      lastPopupAt: _readDateTime(_keyPopMetricLastPopupAt),
+      lastStudyStartAt: _readDateTime(_keyPopMetricLastStudyStartAt),
+      sessionStartedAt: _readDateTime(_keyPopMetricSessionStartedAt),
+    );
+  }
+
+  Future<void> setPopMetrics(PopMetrics metrics) async {
+    await _prefs.setInt(
+        _keyPopMetricTrackedEventCount, metrics.trackedEventCount);
+    await _prefs.setInt(
+        _keyPopMetricMatchedEventCount, metrics.matchedEventCount);
+    await _prefs.setInt(_keyPopMetricShownCount, metrics.popupShownCount);
+    await _prefs.setInt(_keyPopMetricStartCount, metrics.popupStartCount);
+    await _prefs.setInt(_keyPopMetricSnoozeCount, metrics.popupSnoozeCount);
+    await _writeDateTime(_keyPopMetricLastPopupAt, metrics.lastPopupAt);
+    await _writeDateTime(
+        _keyPopMetricLastStudyStartAt, metrics.lastStudyStartAt);
+    await _writeDateTime(
+        _keyPopMetricSessionStartedAt, metrics.sessionStartedAt);
+  }
+
+  DateTime? _readDateTime(String key) {
+    final raw = _prefs.getString(key);
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  Future<void> _writeDateTime(String key, DateTime? value) async {
+    if (value == null) {
+      await _prefs.remove(key);
+      return;
+    }
+    await _prefs.setString(key, value.toIso8601String());
   }
 }
 

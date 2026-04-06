@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../routing/router.dart';
 import '../home/selected_deck_provider.dart';
 import 'deck_pop_settings.dart';
+import 'pop_metrics.dart';
+import 'pop_models.dart';
 import 'pop_study_active_provider.dart';
 
 /// Collects lightweight user activity signals used for pop-study monitoring.
@@ -48,20 +50,36 @@ class PopMonitoringManager {
     if (deckId == null || deckId.isEmpty) return;
 
     final settings = _ref.read(effectivePopSettingsProvider(deckId));
-    if (settings.services.isEmpty) return;
-
-    final locationPath = _readLocationPath();
+    final hasTargets =
+        settings.services.isNotEmpty || settings.customUrls.isNotEmpty;
+    if (!hasTargets) return;
+    final uri = _readLocationUri();
+    final serviceMatched = settings.services.isNotEmpty &&
+        _isServiceMatchedByPath(uri.path, settings.services);
+    final urlMatched = settings.customUrls.isNotEmpty &&
+        _isCustomUrlMatched(uri.toString(), settings.customUrls);
+    final matchedTarget = serviceMatched || urlMatched;
+    await _ref
+        .read(popMetricsProvider.notifier)
+        .recordTrackedEvent(matchedTarget: matchedTarget);
+    final locationPath = uri.path;
     final popPath = '/decks/$deckId/pop';
     if (locationPath == popPath) return;
 
     final now = DateTime.now();
     final interval = Duration(minutes: settings.intervalMinutes);
-    final last = _ref.read(_lastPopupAtProvider);
-    if (last != null && now.difference(last) < interval) {
+    final metrics = _ref.read(popMetricsProvider);
+    final sessionStartedAt = metrics.sessionStartedAt;
+    if (sessionStartedAt == null) return;
+    final baseline =
+        metrics.lastStudyStartAt != null && metrics.lastStudyStartAt!.isAfter(sessionStartedAt)
+            ? metrics.lastStudyStartAt!
+            : sessionStartedAt;
+    if (now.difference(baseline) < interval) {
       return;
     }
 
-    _ref.read(_lastPopupAtProvider.notifier).state = now;
+    await _ref.read(popMetricsProvider.notifier).recordPopupShown(now);
     _popupOpen = true;
     final ctx = rootNavigatorKey.currentContext;
     if (ctx == null) {
@@ -77,11 +95,17 @@ class PopMonitoringManager {
           content: Text('学習のタイミングです。${settings.popCount}問の学習を開始します。'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
+              onPressed: () {
+                _ref.read(popMetricsProvider.notifier).recordPopupSnooze();
+                Navigator.of(dialogContext).pop();
+              },
               child: const Text('後で'),
             ),
             FilledButton(
               onPressed: () {
+                _ref
+                    .read(popMetricsProvider.notifier)
+                    .recordPopupStart(DateTime.now());
                 Navigator.of(dialogContext).pop();
                 final router = _ref.read(routerProvider);
                 router.go('/decks/$deckId/pop');
@@ -95,19 +119,44 @@ class PopMonitoringManager {
     _popupOpen = false;
   }
 
-  String _readLocationPath() {
+  Uri _readLocationUri() {
     final router = _ref.read(routerProvider);
-    return router.routeInformationProvider.value.uri.path;
+    return router.routeInformationProvider.value.uri;
+  }
+
+  bool _isServiceMatchedByPath(String path, Set<PopService> services) {
+    final lower = path.toLowerCase();
+    for (final service in services) {
+      final name = service.name.toLowerCase();
+      if (lower.contains(name)) return true;
+      if (name == 'twitter' && (lower.contains('x') || lower.contains('tweet'))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isCustomUrlMatched(String url, Set<String> patterns) {
+    final lowerUrl = url.toLowerCase();
+    for (final pattern in patterns) {
+      if (lowerUrl.contains(pattern.toLowerCase())) return true;
+    }
+    return false;
   }
 }
 
-final _lastPopupAtProvider = StateProvider<DateTime?>((ref) => null);
-
 final popMonitoringProvider = Provider<PopMonitoringManager>((ref) {
   final manager = PopMonitoringManager(ref);
+  if (ref.read(popStudyActiveProvider) &&
+      ref.read(popMetricsProvider).sessionStartedAt == null) {
+    ref.read(popMetricsProvider.notifier).startSession(DateTime.now());
+  }
   ref.listen<bool>(popStudyActiveProvider, (previous, next) {
-    if (!next) {
-      ref.read(_lastPopupAtProvider.notifier).state = null;
+    final metrics = ref.read(popMetricsProvider.notifier);
+    if (next && previous != true) {
+      metrics.startSession(DateTime.now());
+    } else if (!next && previous == true) {
+      metrics.stopSession();
     }
   });
   manager.start();

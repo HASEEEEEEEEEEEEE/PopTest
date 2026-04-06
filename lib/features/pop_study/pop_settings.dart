@@ -14,6 +14,23 @@ class PopSettingsNotifier extends Notifier<PopSettings> {
     await ref.read(appPrefsProvider).setPopServices(state.services);
   }
 
+  Future<void> setCustomUrls(Set<String> customUrls) async {
+    state = state.copyWith(customUrls: customUrls);
+    await ref.read(appPrefsProvider).setPopCustomUrls(state.customUrls);
+  }
+
+  Future<void> addCustomUrl(String rawUrl) async {
+    final url = rawUrl.trim();
+    if (url.isEmpty) return;
+    final updated = Set<String>.of(state.customUrls)..add(url);
+    await setCustomUrls(updated);
+  }
+
+  Future<void> removeCustomUrl(String url) async {
+    final updated = Set<String>.of(state.customUrls)..remove(url);
+    await setCustomUrls(updated);
+  }
+
   /// Toggles [service] in/out of the selected set and persists the change.
   Future<void> toggleService(PopService service) async {
     final updated = Set<PopService>.of(state.services);

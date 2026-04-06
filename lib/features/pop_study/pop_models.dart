@@ -18,6 +18,7 @@ enum PopService {
 class PopSettings {
   const PopSettings({
     required this.services,
+    required this.customUrls,
     required this.intervalMinutes,
     required this.popCount,
   });
@@ -39,6 +40,9 @@ class PopSettings {
   /// SNS services for which pop-study is enabled. Empty = no interruption.
   final Set<PopService> services;
 
+  /// Custom URL patterns for which pop-study is enabled.
+  final Set<String> customUrls;
+
   /// Interval between pop-study sessions (minutes).
   final int intervalMinutes;
 
@@ -50,6 +54,7 @@ class PopSettings {
   /// Returns a [PopSettings] with all values set to their defaults.
   factory PopSettings.defaults() => const PopSettings(
         services: {},
+        customUrls: {},
         intervalMinutes: defaultIntervalMinutes,
         popCount: defaultPopCount,
       );
@@ -57,11 +62,13 @@ class PopSettings {
   /// [intervalMinutes] and [popCount] are clamped to their valid ranges.
   PopSettings copyWith({
     Set<PopService>? services,
+    Set<String>? customUrls,
     int? intervalMinutes,
     int? popCount,
   }) {
     return PopSettings(
       services: services ?? this.services,
+      customUrls: customUrls ?? this.customUrls,
       intervalMinutes: (intervalMinutes ?? this.intervalMinutes)
           .clamp(minIntervalMinutes, maxIntervalMinutes),
       popCount:
@@ -78,18 +85,21 @@ class DeckPopSettings {
   const DeckPopSettings({
     required this.useGlobal,
     required this.services,
+    required this.customUrls,
     required this.intervalMinutes,
     required this.popCount,
   });
 
   final bool useGlobal;
   final Set<PopService> services;
+  final Set<String> customUrls;
   final int intervalMinutes;
   final int popCount;
 
   factory DeckPopSettings.defaults() => const DeckPopSettings(
         useGlobal: true,
         services: {},
+        customUrls: {},
         intervalMinutes: PopSettings.defaultIntervalMinutes,
         popCount: PopSettings.defaultPopCount,
       );
@@ -97,12 +107,14 @@ class DeckPopSettings {
   DeckPopSettings copyWith({
     bool? useGlobal,
     Set<PopService>? services,
+    Set<String>? customUrls,
     int? intervalMinutes,
     int? popCount,
   }) {
     return DeckPopSettings(
       useGlobal: useGlobal ?? this.useGlobal,
       services: services ?? this.services,
+      customUrls: customUrls ?? this.customUrls,
       intervalMinutes: (intervalMinutes ?? this.intervalMinutes)
           .clamp(PopSettings.minIntervalMinutes, PopSettings.maxIntervalMinutes),
       popCount:
@@ -114,6 +126,7 @@ class DeckPopSettings {
     if (useGlobal) return global;
     return PopSettings(
       services: services,
+      customUrls: customUrls,
       intervalMinutes: intervalMinutes,
       popCount: popCount,
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../pop_study/pop_models.dart';
+import '../pop_study/pop_metrics.dart';
 import '../pop_study/deck_pop_settings.dart';
 import '../pop_study/pop_repository.dart';
 import '../pop_study/pop_settings.dart';
@@ -22,6 +23,7 @@ class HomeScreen extends ConsumerWidget {
     final selectedDeckId = ref.watch(selectedDeckProvider);
     final globalPopSettings = ref.watch(popSettingsProvider);
     final isActive = ref.watch(popStudyActiveProvider);
+    final metrics = ref.watch(popMetricsProvider);
     final selectedDeckIdOrEmpty = selectedDeckId ?? '';
     final hasSelectedDeck = selectedDeckId != null;
     final selectedDeckSettings = !hasSelectedDeck
@@ -45,6 +47,13 @@ class HomeScreen extends ConsumerWidget {
     final canStart =
         selectedDeckId != null && effectivePopSettings.services.isNotEmpty;
 
+    final intervalDuration =
+        Duration(minutes: effectivePopSettings.intervalMinutes);
+    final nextStudyAt = _computeNextStudyAt(metrics, intervalDuration);
+    final nextStudyLabel = nextStudyAt == null
+        ? '未定'
+        : '${nextStudyAt.month}/${nextStudyAt.day} ${nextStudyAt.hour.toString().padLeft(2, '0')}:${nextStudyAt.minute.toString().padLeft(2, '0')}';
+
     return Scaffold(
       appBar: AppBar(title: const Text('ホーム')),
       body: Column(
@@ -55,6 +64,7 @@ class HomeScreen extends ConsumerWidget {
             _PopStudyStatusBar(
               deckName: deckName,
               questionsPerPopup: effectivePopSettings.popCount,
+              nextStudyLabel: nextStudyLabel,
             ),
 
           // ── Main content ───────────────────────────────────────────────
@@ -68,22 +78,34 @@ class HomeScreen extends ConsumerWidget {
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 12),
                   _MetricCard(
-                    label: '今日の学習数',
-                    value: '—',
+                    label: 'ポップ表示回数',
+                    value: '${metrics.popupShownCount}',
                     icon: Icons.menu_book_outlined,
                     color: colorScheme.primaryContainer,
                   ),
                   _MetricCard(
-                    label: '正答率',
-                    value: '—',
+                    label: '開始回数',
+                    value: '${metrics.popupStartCount}',
                     icon: Icons.check_circle_outline,
                     color: colorScheme.secondaryContainer,
                   ),
                   _MetricCard(
-                    label: '割り込み回数',
-                    value: '—',
+                    label: 'スキップ回数',
+                    value: '${metrics.popupSnoozeCount}',
                     icon: Icons.notifications_outlined,
                     color: colorScheme.tertiaryContainer,
+                  ),
+                  _MetricCard(
+                    label: '追跡イベント数',
+                    value: '${metrics.trackedEventCount}',
+                    icon: Icons.track_changes_outlined,
+                    color: colorScheme.surfaceContainerHighest,
+                  ),
+                  _MetricCard(
+                    label: '一致イベント数',
+                    value: '${metrics.matchedEventCount}',
+                    icon: Icons.link_outlined,
+                    color: colorScheme.surfaceContainer,
                   ),
 
                   // ── Pop study settings ─────────────────────────────────
@@ -132,9 +154,9 @@ class HomeScreen extends ConsumerWidget {
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
+                           Wrap(
+                             spacing: 8,
+                             runSpacing: 4,
                              children: PopService.values
                                  .map(
                                    (service) => FilterChip(
@@ -158,10 +180,40 @@ class HomeScreen extends ConsumerWidget {
                                    ),
                                  )
                                  .toList(),
-                           ),
-                           if (effectivePopSettings.services.isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
+                            ),
+                            const SizedBox(height: 8),
+                            _CustomUrlSection(
+                              urls: effectivePopSettings.customUrls,
+                              onAdd: (url) {
+                                if (!hasSelectedDeck || useGlobalSettings) {
+                                  ref
+                                      .read(popSettingsProvider.notifier)
+                                      .addCustomUrl(url);
+                                  return;
+                                }
+                                ref
+                                    .read(deckPopSettingsProvider(
+                                            selectedDeckIdOrEmpty)
+                                        .notifier)
+                                    .addCustomUrl(url);
+                              },
+                              onRemove: (url) {
+                                if (!hasSelectedDeck || useGlobalSettings) {
+                                  ref
+                                      .read(popSettingsProvider.notifier)
+                                      .removeCustomUrl(url);
+                                  return;
+                                }
+                                ref
+                                    .read(deckPopSettingsProvider(
+                                            selectedDeckIdOrEmpty)
+                                        .notifier)
+                                    .removeCustomUrl(url);
+                              },
+                            ),
+                            if (effectivePopSettings.services.isEmpty)
+                             Padding(
+                               padding: const EdgeInsets.only(top: 6),
                               child: Text(
                                 'サービス未選択：ポップ学習を開始できません',
                                 style: Theme.of(context)
@@ -232,10 +284,12 @@ class _PopStudyStatusBar extends StatelessWidget {
   const _PopStudyStatusBar({
     required this.deckName,
     required this.questionsPerPopup,
+    required this.nextStudyLabel,
   });
 
   final String? deckName;
   final int questionsPerPopup;
+  final String nextStudyLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -255,7 +309,7 @@ class _PopStudyStatusBar extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              label,
+              '$label / 次回: $nextStudyLabel',
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium
@@ -264,6 +318,79 @@ class _PopStudyStatusBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CustomUrlSection extends StatefulWidget {
+  const _CustomUrlSection({
+    required this.urls,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final Set<String> urls;
+  final ValueChanged<String> onAdd;
+  final ValueChanged<String> onRemove;
+
+  @override
+  State<_CustomUrlSection> createState() => _CustomUrlSectionState();
+}
+
+class _CustomUrlSectionState extends State<_CustomUrlSection> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('対象URL（部分一致）'),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText: '例: youtube.com/shorts',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonal(
+              onPressed: () {
+                final value = _controller.text.trim();
+                if (value.isEmpty) return;
+                widget.onAdd(value);
+                _controller.clear();
+              },
+              child: const Text('追加'),
+            ),
+          ],
+        ),
+        if (widget.urls.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: widget.urls
+                .map((url) => InputChip(
+                      label: Text(url),
+                      onDeleted: () => widget.onRemove(url),
+                    ))
+                .toList(),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -294,4 +421,14 @@ class _MetricCard extends StatelessWidget {
       ),
     );
   }
+}
+
+DateTime? _computeNextStudyAt(PopMetrics metrics, Duration interval) {
+  final sessionStartedAt = metrics.sessionStartedAt;
+  if (sessionStartedAt == null) return null;
+  final baseline =
+      metrics.lastStudyStartAt != null && metrics.lastStudyStartAt!.isAfter(sessionStartedAt)
+          ? metrics.lastStudyStartAt!
+          : sessionStartedAt;
+  return baseline.add(interval);
 }
