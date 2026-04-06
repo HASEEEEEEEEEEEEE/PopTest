@@ -27,6 +27,8 @@ class HomeScreen extends ConsumerWidget {
     final selectedDeckSettings = !hasSelectedDeck
         ? null
         : ref.watch(deckPopSettingsProvider(selectedDeckIdOrEmpty));
+    final useGlobalSettings =
+        !hasSelectedDeck || (selectedDeckSettings?.useGlobal ?? true);
     final effectivePopSettings = !hasSelectedDeck
         ? globalPopSettings
         : ref.watch(effectivePopSettingsProvider(selectedDeckIdOrEmpty));
@@ -139,12 +141,11 @@ class HomeScreen extends ConsumerWidget {
                                       label: Text(service.label),
                                       selected: effectivePopSettings.services
                                           .contains(service),
-                                      onSelected: selectedDeckId == null
+                                      onSelected: !hasSelectedDeck
                                           ? (_) => ref
                                               .read(popSettingsProvider.notifier)
                                               .toggleService(service)
-                                          : selectedDeckSettings?.useGlobal ??
-                                                  false
+                                          : useGlobalSettings
                                               ? (_) => ref
                                                   .read(popSettingsProvider
                                                       .notifier)
