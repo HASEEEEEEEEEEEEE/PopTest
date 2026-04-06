@@ -31,7 +31,8 @@ class PopMonitoringManager {
   void start() {
     _timer?.cancel();
     _lastActivityCount = _ref.read(popActivityProvider);
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (tickTimer) {
+      if (!tickTimer.isActive) return;
       _tick();
     });
   }
@@ -78,7 +79,7 @@ class PopMonitoringManager {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('ポップ学習'),
-          content: Text('現在の操作を検知しました。${settings.popCount}問の学習を開始します。'),
+          content: Text('学習のタイミングです。${settings.popCount}問の学習を開始します。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),

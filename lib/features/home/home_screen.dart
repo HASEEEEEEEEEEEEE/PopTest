@@ -22,12 +22,14 @@ class HomeScreen extends ConsumerWidget {
     final selectedDeckId = ref.watch(selectedDeckProvider);
     final globalPopSettings = ref.watch(popSettingsProvider);
     final isActive = ref.watch(popStudyActiveProvider);
-    final selectedDeckSettings = selectedDeckId == null
+    final selectedDeckIdOrEmpty = selectedDeckId ?? '';
+    final hasSelectedDeck = selectedDeckId != null;
+    final selectedDeckSettings = !hasSelectedDeck
         ? null
-        : ref.watch(deckPopSettingsProvider(selectedDeckId!));
-    final effectivePopSettings = selectedDeckId == null
+        : ref.watch(deckPopSettingsProvider(selectedDeckIdOrEmpty));
+    final effectivePopSettings = !hasSelectedDeck
         ? globalPopSettings
-        : ref.watch(effectivePopSettingsProvider(selectedDeckId!));
+        : ref.watch(effectivePopSettingsProvider(selectedDeckIdOrEmpty));
 
     final selectedDeck = decks.firstWhere(
       (d) => d.deckId == selectedDeckId,
@@ -149,9 +151,9 @@ class HomeScreen extends ConsumerWidget {
                                                   .toggleService(service)
                                           : (_) => ref
                                               .read(deckPopSettingsProvider(
-                                                      selectedDeckId!)
-                                                 .notifier)
-                                             .toggleService(service),
+                                                      selectedDeckIdOrEmpty)
+                                                  .notifier)
+                                              .toggleService(service),
                                    ),
                                  )
                                  .toList(),
