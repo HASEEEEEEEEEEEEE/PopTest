@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/local/app_prefs.dart';
@@ -41,7 +43,7 @@ class PopMetricsNotifier extends Notifier<PopMetrics> {
     required DateTime at,
   }) async {
     final since = state.lastTrackedAt ?? state.sessionStartedAt;
-    final elapsed = since == null ? 0 : at.difference(since).inSeconds;
+    final elapsed = since == null ? 0 : max(0, at.difference(since).inSeconds);
     final increment = matchedTarget && elapsed > 0 ? elapsed : 0;
     await _persist(state.copyWith(
       trackedEventCount: state.trackedEventCount + 1,
