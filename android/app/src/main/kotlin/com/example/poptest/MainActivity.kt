@@ -9,28 +9,44 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private var methodChannel: MethodChannel? = null
+    private var eventChannel: EventChannel? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(
+        methodChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             methodChannelName,
-        ).setMethodCallHandler(::handleMethodCall)
+        ).apply {
+            setMethodCallHandler(::handleMethodCall)
+        }
 
-        EventChannel(
+        eventChannel = EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             eventChannelName,
-        ).setStreamHandler(
-            object : EventChannel.StreamHandler {
-                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                    PopMonitoringEventBus.setEventSink(events)
-                }
+        ).apply {
+            setStreamHandler(
+                object : EventChannel.StreamHandler {
+                    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                        PopMonitoringEventBus.setEventSink(events)
+                    }
 
-                override fun onCancel(arguments: Any?) {
-                    PopMonitoringEventBus.setEventSink(null)
-                }
-            },
-        )
+                    override fun onCancel(arguments: Any?) {
+                        PopMonitoringEventBus.setEventSink(null)
+                    }
+                },
+            )
+        }
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        methodChannel?.setMethodCallHandler(null)
+        eventChannel?.setStreamHandler(null)
+        methodChannel = null
+        eventChannel = null
+        PopMonitoringEventBus.setEventSink(null)
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {

@@ -5,6 +5,8 @@ import android.os.Looper
 import io.flutter.plugin.common.EventChannel
 
 object PopMonitoringEventBus {
+    // Cap pending events while Flutter listener is disconnected.
+    // 64 keeps memory bounded while preserving recent foreground samples.
     private const val maxPendingEvents = 64
 
     private val mainHandler = Handler(Looper.getMainLooper())

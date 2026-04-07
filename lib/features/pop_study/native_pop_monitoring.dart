@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'pop_models.dart';
@@ -67,9 +68,11 @@ class NativePopMonitoringBridge {
         if (event == null) continue;
         yield event;
       }
-    } on MissingPluginException {
+    } on MissingPluginException catch (error) {
+      debugPrint('Native pop monitoring plugin missing: $error');
       return;
-    } on PlatformException {
+    } on PlatformException catch (error) {
+      debugPrint('Native pop monitoring event stream failed: $error');
       return;
     }
   }
@@ -82,9 +85,11 @@ class NativePopMonitoringBridge {
         config.toMap(),
       );
       return started ?? false;
-    } on MissingPluginException {
+    } on MissingPluginException catch (error) {
+      debugPrint('Native pop monitoring start plugin missing: $error');
       return false;
-    } on PlatformException {
+    } on PlatformException catch (error) {
+      debugPrint('Native pop monitoring start failed: $error');
       return false;
     }
   }
@@ -93,9 +98,11 @@ class NativePopMonitoringBridge {
     if (!Platform.isAndroid) return;
     try {
       await _methodChannel.invokeMethod<void>('stopMonitoring');
-    } on MissingPluginException {
+    } on MissingPluginException catch (error) {
+      debugPrint('Native pop monitoring stop plugin missing: $error');
       return;
-    } on PlatformException {
+    } on PlatformException catch (error) {
+      debugPrint('Native pop monitoring stop failed: $error');
       return;
     }
   }
@@ -104,9 +111,11 @@ class NativePopMonitoringBridge {
     if (!Platform.isAndroid) return;
     try {
       await _methodChannel.invokeMethod<void>('openUsageAccessSettings');
-    } on MissingPluginException {
+    } on MissingPluginException catch (error) {
+      debugPrint('Usage access settings plugin missing: $error');
       return;
-    } on PlatformException {
+    } on PlatformException catch (error) {
+      debugPrint('Failed to open usage access settings: $error');
       return;
     }
   }

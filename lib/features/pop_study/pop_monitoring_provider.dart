@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -29,7 +30,11 @@ class PopMonitoringManager {
       (event) {
         unawaited(_onNativeEvent(event));
       },
-      onError: (_, __) => unawaited(_syncNativeMonitoring()),
+      onError: (error, stackTrace) {
+        debugPrint('Native pop monitoring stream error: $error');
+        debugPrint('$stackTrace');
+        unawaited(_syncNativeMonitoring());
+      },
     );
     _ref.listen<bool>(
       popStudyActiveProvider,
