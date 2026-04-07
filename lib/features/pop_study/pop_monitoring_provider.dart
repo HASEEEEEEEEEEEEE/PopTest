@@ -6,66 +6,113 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../routing/router.dart';
 import '../home/selected_deck_provider.dart';
 import 'deck_pop_settings.dart';
+import 'native_pop_monitoring.dart';
 import 'pop_metrics.dart';
 import 'pop_models.dart';
+import 'pop_settings.dart';
 import 'pop_study_active_provider.dart';
 
-/// Collects lightweight user activity signals used for pop-study monitoring.
-class PopActivityNotifier extends Notifier<int> {
-  @override
-  int build() => 0;
-
-  void record() => state = state + 1;
-}
-
-final popActivityProvider =
-    NotifierProvider<PopActivityNotifier, int>(PopActivityNotifier.new);
-
-/// Starts/stops user-activity-based pop monitoring and opens pop sessions.
+/// Starts/stops Android native monitoring and opens pop sessions in Flutter.
 class PopMonitoringManager {
-  PopMonitoringManager(this._ref);
+  PopMonitoringManager(this._ref, this._nativeBridge);
 
   final Ref _ref;
+  final NativePopMonitoringBridge _nativeBridge;
+
+  StreamSubscription<NativePopMonitoringEvent>? _eventSubscription;
   bool _popupOpen = false;
-  Timer? _debounceTimer;
+  bool _syncInProgress = false;
+  bool _syncPending = false;
 
   void start() {
-    _ref.listen<int>(popActivityProvider, (previous, next) {
-      if (previous == next) return;
-      _debounceTimer?.cancel();
-      _debounceTimer = Timer(const Duration(milliseconds: 400), _tick);
+    _eventSubscription = _nativeBridge.eventStream().listen((event) {
+      unawaited(_onNativeEvent(event));
     });
+    _ref.listen<bool>(
+      popStudyActiveProvider,
+      (_, __) => unawaited(_syncNativeMonitoring()),
+      fireImmediately: true,
+    );
+    _ref.listen<String?>(
+      selectedDeckProvider,
+      (_, __) => unawaited(_syncNativeMonitoring()),
+    );
+    _ref.listen<PopSettings>(
+      popSettingsProvider,
+      (_, __) => unawaited(_syncNativeMonitoring()),
+    );
   }
 
   void dispose() {
-    _debounceTimer?.cancel();
-    _debounceTimer = null;
+    _eventSubscription?.cancel();
+    _eventSubscription = null;
+    unawaited(_nativeBridge.stopMonitoring());
   }
 
-  Future<void> _tick() async {
+  Future<void> _syncNativeMonitoring() async {
+    if (_syncInProgress) {
+      _syncPending = true;
+      return;
+    }
+    do {
+      _syncPending = false;
+      _syncInProgress = true;
+      try {
+        await _performSync();
+      } finally {
+        _syncInProgress = false;
+      }
+    } while (_syncPending);
+  }
+
+  Future<void> _performSync() async {
+    final active = _ref.read(popStudyActiveProvider);
+    if (!active) {
+      await _nativeBridge.stopMonitoring();
+      return;
+    }
+    final deckId = _ref.read(selectedDeckProvider);
+    if (deckId == null || deckId.isEmpty) {
+      await _nativeBridge.stopMonitoring();
+      return;
+    }
+    final settings = _ref.read(effectivePopSettingsProvider(deckId));
+    if (settings.services.isEmpty) {
+      await _nativeBridge.stopMonitoring();
+      return;
+    }
+    final started = await _nativeBridge.startMonitoring(
+      NativePopMonitoringConfig(
+        services: settings.services,
+        customUrls: settings.customUrls,
+        intervalMinutes: settings.intervalMinutes,
+        popCount: settings.popCount,
+      ),
+    );
+    if (started) return;
+    await _nativeBridge.openUsageAccessSettings();
+    await _ref.read(popStudyActiveProvider.notifier).setActive(false);
+  }
+
+  Future<void> _onNativeEvent(NativePopMonitoringEvent event) async {
     final active = _ref.read(popStudyActiveProvider);
     if (!active || _popupOpen) return;
 
     final deckId = _ref.read(selectedDeckProvider);
     if (deckId == null || deckId.isEmpty) return;
-
     final settings = _ref.read(effectivePopSettingsProvider(deckId));
     final hasTargets =
         settings.services.isNotEmpty || settings.customUrls.isNotEmpty;
     if (!hasTargets) return;
-    final uri = _readLocationUri();
-    final hasWebContext = uri.host.isNotEmpty;
-    final serviceMatched = settings.services.isNotEmpty &&
-        (_isServiceMatched(uri, settings.services) || !hasWebContext);
-    final urlMatched = settings.customUrls.isNotEmpty &&
-        _isCustomUrlMatched(uri.toString(), settings.customUrls);
-    final matchedTarget = serviceMatched || urlMatched;
-    final now = DateTime.now();
+
+    final now = event.occurredAt;
     await _ref
         .read(popMetricsProvider.notifier)
-        .recordTrackedEvent(matchedTarget: matchedTarget, at: now);
-    if (!matchedTarget) return;
-    final locationPath = uri.path;
+        .recordTrackedEvent(matchedTarget: event.matchedTarget, at: now);
+    if (!event.matchedTarget) return;
+
+    final router = _ref.read(routerProvider);
+    final locationPath = router.routeInformationProvider.value.uri.path;
     final popPath = '/decks/$deckId/pop';
     if (locationPath == popPath) return;
 
@@ -77,105 +124,50 @@ class PopMonitoringManager {
 
     await _ref.read(popMetricsProvider.notifier).recordPopupShown(now);
     _popupOpen = true;
-    final ctx = rootNavigatorKey.currentContext;
-    if (ctx == null) {
+    try {
+      final ctx = rootNavigatorKey.currentContext;
+      if (ctx == null) return;
+      await showDialog<void>(
+        context: ctx,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('ポップ学習'),
+            content: Text('学習のタイミングです。${settings.popCount}問の学習を開始します。'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  _ref.read(popMetricsProvider.notifier).recordPopupSnooze();
+                  Navigator.of(dialogContext).pop();
+                },
+                child: const Text('後で'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  _ref
+                      .read(popMetricsProvider.notifier)
+                      .recordPopupStart(DateTime.now());
+                  Navigator.of(dialogContext).pop();
+                  router.go('/decks/$deckId/pop');
+                },
+                child: const Text('開始'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
       _popupOpen = false;
-      return;
     }
-    await showDialog<void>(
-      context: ctx,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('ポップ学習'),
-          content: Text('学習のタイミングです。${settings.popCount}問の学習を開始します。'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                _ref.read(popMetricsProvider.notifier).recordPopupSnooze();
-                Navigator.of(dialogContext).pop();
-              },
-              child: const Text('後で'),
-            ),
-            FilledButton(
-              onPressed: () {
-                _ref
-                    .read(popMetricsProvider.notifier)
-                    .recordPopupStart(DateTime.now());
-                Navigator.of(dialogContext).pop();
-                final router = _ref.read(routerProvider);
-                router.go('/decks/$deckId/pop');
-              },
-              child: const Text('開始'),
-            ),
-          ],
-        );
-      },
-    );
-    _popupOpen = false;
-  }
-
-  Uri _readLocationUri() {
-    final router = _ref.read(routerProvider);
-    return router.routeInformationProvider.value.uri;
-  }
-
-  bool _isServiceMatched(Uri uri, Set<PopService> services) {
-    final host = uri.host.toLowerCase();
-    final path = uri.path.toLowerCase();
-    final full = uri.toString().toLowerCase();
-    for (final service in services) {
-      if (_matchesService(service, host: host, path: path, full: full)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool _matchesService(
-    PopService service, {
-    required String host,
-    required String path,
-    required String full,
-  }) {
-    switch (service) {
-      case PopService.twitter:
-        return host == 'x.com' ||
-            host.endsWith('.x.com') ||
-            host == 'twitter.com' ||
-            host.endsWith('.twitter.com') ||
-            path.contains('/tweet') ||
-            path.contains('/tweets') ||
-            full.contains('://x.com/') ||
-            full.contains('://twitter.com/');
-      case PopService.instagram:
-        return host == 'instagram.com' ||
-            host.endsWith('.instagram.com') ||
-            full.contains('://instagram.com/');
-      case PopService.youtube:
-        return host == 'youtube.com' ||
-            host.endsWith('.youtube.com') ||
-            host == 'youtu.be' ||
-            full.contains('://youtube.com/') ||
-            full.contains('://youtu.be/');
-      case PopService.tiktok:
-        return host == 'tiktok.com' ||
-            host.endsWith('.tiktok.com') ||
-            full.contains('://tiktok.com/');
-    }
-  }
-
-  bool _isCustomUrlMatched(String url, Set<String> patterns) {
-    final lowerUrl = url.toLowerCase();
-    for (final pattern in patterns) {
-      if (lowerUrl.contains(pattern.toLowerCase())) return true;
-    }
-    return false;
   }
 }
 
+final nativePopMonitoringBridgeProvider = Provider<NativePopMonitoringBridge>(
+  (_) => NativePopMonitoringBridge(),
+);
+
 final popMonitoringProvider = Provider<PopMonitoringManager>((ref) {
-  final manager = PopMonitoringManager(ref);
+  final manager = PopMonitoringManager(ref, ref.read(nativePopMonitoringBridgeProvider));
   ref.listen<bool>(popStudyActiveProvider, (previous, next) {
     final metrics = ref.read(popMetricsProvider.notifier);
     if (next && previous != true) {
