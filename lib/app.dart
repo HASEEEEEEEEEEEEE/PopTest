@@ -19,14 +19,6 @@ class PopTestApp extends ConsumerWidget {
         useMaterial3: true,
       ),
       routerConfig: router,
-      builder: (context, child) {
-        return Listener(
-          behavior: HitTestBehavior.translucent,
-          onPointerDown: (_) =>
-              ref.read(popActivityProvider.notifier).record(),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
     );
   }
 }
