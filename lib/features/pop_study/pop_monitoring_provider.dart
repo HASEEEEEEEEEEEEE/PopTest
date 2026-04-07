@@ -25,9 +25,12 @@ class PopMonitoringManager {
   bool _syncPending = false;
 
   void start() {
-    _eventSubscription = _nativeBridge.eventStream().listen((event) {
-      unawaited(_onNativeEvent(event));
-    });
+    _eventSubscription = _nativeBridge.eventStream().listen(
+      (event) {
+        unawaited(_onNativeEvent(event));
+      },
+      onError: (_, __) => unawaited(_syncNativeMonitoring()),
+    );
     _ref.listen<bool>(
       popStudyActiveProvider,
       (_, __) => unawaited(_syncNativeMonitoring()),

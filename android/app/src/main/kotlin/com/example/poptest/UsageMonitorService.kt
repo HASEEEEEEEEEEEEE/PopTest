@@ -80,6 +80,7 @@ class UsageMonitorService : Service() {
     }
 
     private fun readForegroundPackageName(): String? {
+        if (!isUsageAccessGranted(this)) return null
         val usageStats = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             ?: return null
         val end = System.currentTimeMillis()
@@ -145,7 +146,7 @@ class UsageMonitorService : Service() {
         private const val notificationId = 4001
         private const val notificationChannelId = "poptest_monitoring"
 
-        private const val checkIntervalMs = 5_000L
+        private const val checkIntervalMs = 10_000L
         private const val usageWindowMs = 15_000L
 
         fun start(context: Context, services: List<String>) {

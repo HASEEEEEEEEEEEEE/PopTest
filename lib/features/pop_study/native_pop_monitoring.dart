@@ -45,12 +45,11 @@ class NativePopMonitoringEvent {
     final packageNameRaw = raw['packageName'];
     final packageName = packageNameRaw is String ? packageNameRaw : null;
     final timestampRaw = raw['timestampMs'];
-    final timestampMs =
-        timestampRaw is int ? timestampRaw : DateTime.now().millisecondsSinceEpoch;
+    if (timestampRaw is! int) return null;
     return NativePopMonitoringEvent(
       matchedTarget: matchedTarget,
       packageName: packageName,
-      occurredAt: DateTime.fromMillisecondsSinceEpoch(timestampMs),
+      occurredAt: DateTime.fromMillisecondsSinceEpoch(timestampRaw),
     );
   }
 }

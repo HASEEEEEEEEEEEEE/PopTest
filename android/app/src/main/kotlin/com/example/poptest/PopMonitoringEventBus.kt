@@ -29,6 +29,8 @@ object PopMonitoringEventBus {
                     return@synchronized
                 }
                 if (pendingEvents.size >= maxPendingEvents) {
+                    // Keep memory bounded; old events can be safely dropped because
+                    // Flutter enforces popup timing with persisted metrics.
                     pendingEvents.removeFirst()
                 }
                 pendingEvents.addLast(event)
