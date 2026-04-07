@@ -56,11 +56,12 @@ class MainActivity : FlutterActivity() {
                 val services = (args?.get("services") as? List<*>)
                     ?.mapNotNull { item -> item as? String }
                     ?: emptyList()
+                val intervalMinutes = (args?.get("intervalMinutes") as? Number)?.toInt() ?: 30
                 if (!UsageMonitorService.isUsageAccessGranted(this)) {
                     result.success(false)
                     return
                 }
-                UsageMonitorService.start(this, services)
+                UsageMonitorService.start(this, services, intervalMinutes)
                 result.success(true)
             }
 

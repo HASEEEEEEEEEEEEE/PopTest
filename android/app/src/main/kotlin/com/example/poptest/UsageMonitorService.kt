@@ -20,11 +20,12 @@ class UsageMonitorService : Service() {
     private val checker = object : Runnable {
         override fun run() {
             emitForegroundMatchEvent()
-            mainHandler.postDelayed(this, checkIntervalMs)
+            mainHandler.postDelayed(this, currentCheckIntervalMs)
         }
     }
 
     private var targetPackages: Set<String> = emptySet()
+    private var currentCheckIntervalMs: Long = defaultCheckIntervalMs
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -62,6 +63,8 @@ class UsageMonitorService : Service() {
     private fun updateTargets(intent: Intent) {
         val services =
             intent.getStringArrayListExtra(extraServices)?.toSet() ?: emptySet()
+        val intervalMinutes = intent.getIntExtra(extraIntervalMinutes, defaultIntervalMinutes)
+        currentCheckIntervalMs = resolveCheckIntervalMs(intervalMinutes)
         targetPackages = services
             .flatMap { service -> packagesForService(service) }
             .toSet()
@@ -142,17 +145,22 @@ class UsageMonitorService : Service() {
         private const val actionStart = "com.example.poptest.action.START_MONITORING"
         private const val actionStop = "com.example.poptest.action.STOP_MONITORING"
         private const val extraServices = "services"
+        private const val extraIntervalMinutes = "intervalMinutes"
 
         private const val notificationId = 4001
         private const val notificationChannelId = "poptest_monitoring"
 
-        private const val checkIntervalMs = 10_000L
+        private const val minCheckIntervalMs = 15_000L
+        private const val defaultCheckIntervalMs = 60_000L
+        private const val maxCheckIntervalMs = 120_000L
+        private const val defaultIntervalMinutes = 30
         private const val usageWindowMs = 15_000L
 
-        fun start(context: Context, services: List<String>) {
+        fun start(context: Context, services: List<String>, intervalMinutes: Int) {
             val intent = Intent(context, UsageMonitorService::class.java)
                 .setAction(actionStart)
                 .putStringArrayListExtra(extraServices, ArrayList(services))
+                .putExtra(extraIntervalMinutes, intervalMinutes)
             ContextCompat.startForegroundService(context, intent)
         }
 
@@ -180,13 +188,17 @@ class UsageMonitorService : Service() {
                 "instagram" -> setOf("com.instagram.android")
                 "youtube" -> setOf(
                     "com.google.android.youtube",
-                    "com.vanced.android.youtube",
                     "app.rvx.android.youtube",
                 )
 
                 "tiktok" -> setOf("com.zhiliaoapp.musically", "com.ss.android.ugc.trill")
                 else -> emptySet()
             }
+        }
+
+        private fun resolveCheckIntervalMs(intervalMinutes: Int): Long {
+            val derived = intervalMinutes.coerceAtLeast(1).toLong() * 60_000L
+            return derived.coerceIn(minCheckIntervalMs, maxCheckIntervalMs)
         }
     }
 }

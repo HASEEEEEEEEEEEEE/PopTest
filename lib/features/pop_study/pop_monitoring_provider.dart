@@ -62,6 +62,8 @@ class PopMonitoringManager {
       _syncPending = true;
       return;
     }
+    // Coalesce rapid state changes into sequential syncs and always apply
+    // the latest monitoring configuration.
     do {
       _syncPending = false;
       _syncInProgress = true;
