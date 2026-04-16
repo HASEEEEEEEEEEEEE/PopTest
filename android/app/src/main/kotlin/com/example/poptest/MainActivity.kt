@@ -57,7 +57,7 @@ class MainActivity : FlutterActivity() {
                     ?.mapNotNull { item -> item as? String }
                     ?: emptyList()
                 val customUrls = (args?.get("customUrls") as? List<*>)
-                    ?.mapNotNull { item -> (item as? String)?.trim()?.takeIf { it.isNotEmpty() } }
+                    ?.mapNotNull { item -> item as? String }
                     ?: emptyList()
                 val intervalMinutes = (args?.get("intervalMinutes") as? Number)?.toInt() ?: 30
                 if (!hasRequiredPermissions(customUrls)) {
@@ -113,7 +113,7 @@ class MainActivity : FlutterActivity() {
     private fun hasRequiredPermissions(customUrls: List<String>): Boolean {
         val usageGranted = UsageMonitorService.isUsageAccessGranted(this)
         if (!usageGranted) return false
-        val needsAccessibility = customUrls.isNotEmpty()
+        val needsAccessibility = customUrls.any { it.isNotBlank() }
         if (!needsAccessibility) return true
         return AccessibilityMonitorService.isAccessibilityEnabled(this)
     }

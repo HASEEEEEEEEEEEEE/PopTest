@@ -50,6 +50,7 @@ class AccessibilityMonitorService : AccessibilityService() {
             "com.opera.browser" to listOf("com.opera.browser:id/url_field"),
             "com.duckduckgo.mobile.android" to listOf("com.duckduckgo.mobile.android:id/omnibarTextInput"),
         )
+        private val domainLikeRegex = Regex("^[a-z0-9.-]+\\.[a-z]{2,}([/:?#].*)?$")
 
         fun isAccessibilityEnabled(context: Context): Boolean {
             val expectedComponent = ComponentName(context, AccessibilityMonitorService::class.java)
@@ -120,7 +121,9 @@ class AccessibilityMonitorService : AccessibilityService() {
 
     private fun looksLikeUrl(text: String): Boolean {
         val candidate = text.lowercase(Locale.US)
-        return candidate.contains("://") || candidate.contains('.') || candidate.startsWith("about:")
+        if (candidate.startsWith("http://") || candidate.startsWith("https://")) return true
+        if (candidate.startsWith("about:")) return true
+        return domainLikeRegex.matches(candidate)
     }
 
     private data class TraversalNode(

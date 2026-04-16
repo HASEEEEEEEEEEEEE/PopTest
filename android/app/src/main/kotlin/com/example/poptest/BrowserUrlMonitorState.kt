@@ -56,7 +56,15 @@ object BrowserUrlMonitorState {
         if (url.isNullOrBlank()) return false
         if (targetPatterns.isEmpty()) return false
         val normalizedUrl = normalizeUrl(url)
-        return targetPatterns.any { pattern -> normalizedUrl.contains(pattern) }
+        val normalizedHost = extractHost(normalizedUrl)
+        return targetPatterns.any { pattern ->
+            val patternHost = extractHost(pattern)
+            val hostMatched = hostMatches(normalizedHost, patternHost)
+            if (!hostMatched) return@any false
+            val hasPathConstraint = pattern.contains("/")
+            if (!hasPathConstraint) return@any true
+            normalizedUrl.contains(pattern)
+        }
     }
 
     private fun normalizePattern(value: String): String? {
@@ -71,5 +79,14 @@ object BrowserUrlMonitorState {
         out = out.removePrefix("http://")
         out = out.removePrefix("www.")
         return out.trimEnd('/')
+    }
+
+    private fun extractHost(value: String): String {
+        return value.substringBefore('/').substringBefore('?').substringBefore('#')
+    }
+
+    private fun hostMatches(urlHost: String, patternHost: String): Boolean {
+        if (urlHost.isBlank() || patternHost.isBlank()) return false
+        return urlHost == patternHost || urlHost.endsWith(".$patternHost")
     }
 }
