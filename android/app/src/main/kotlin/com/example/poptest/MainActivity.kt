@@ -113,8 +113,8 @@ class MainActivity : FlutterActivity() {
     private fun hasRequiredPermissions(customUrls: List<String>): Boolean {
         val usageGranted = UsageMonitorService.isUsageAccessGranted(this)
         if (!usageGranted) return false
-        val needsAccessibility = customUrls.any { it.isNotBlank() }
-        if (!needsAccessibility) return true
+        val requiresAccessibilityPermission = customUrls.any { it.isNotBlank() }
+        if (!requiresAccessibilityPermission) return true
         return AccessibilityMonitorService.isAccessibilityEnabled(this)
     }
 
