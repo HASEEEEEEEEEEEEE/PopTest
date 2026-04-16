@@ -63,7 +63,10 @@ object BrowserUrlMonitorState {
             if (!hostMatched) return@any false
             val hasPathConstraint = pattern.contains("/")
             if (!hasPathConstraint) return@any true
-            normalizedUrl.contains(pattern)
+            if (!normalizedUrl.startsWith(pattern)) return@any false
+            if (normalizedUrl.length == pattern.length) return@any true
+            val nextChar = normalizedUrl[pattern.length]
+            nextChar == '/' || nextChar == '?' || nextChar == '#'
         }
     }
 

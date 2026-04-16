@@ -102,7 +102,9 @@ class PopMonitoringManager {
     if (started) return;
     final permissions = await _nativeBridge.getPermissionStatus();
     final hasUsageAccess = permissions['usageAccess'] == true;
-    final requiresAccessibilityPermission = settings.customUrls.isNotEmpty;
+    final requiresAccessibilityPermission = settings.customUrls.any(
+      (url) => url.trim().isNotEmpty,
+    );
     final hasAccessibility = permissions['accessibilityEnabled'] == true;
     if (!hasUsageAccess) {
       await _nativeBridge.openUsageAccessSettings();
