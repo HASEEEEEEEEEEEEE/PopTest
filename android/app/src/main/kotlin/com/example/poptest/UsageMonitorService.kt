@@ -48,6 +48,7 @@ class UsageMonitorService : Service() {
 
     override fun onDestroy() {
         stopChecking()
+        BrowserUrlMonitorState.clear()
         super.onDestroy()
     }
 
@@ -63,8 +64,11 @@ class UsageMonitorService : Service() {
     private fun updateTargets(intent: Intent) {
         val services =
             intent.getStringArrayListExtra(extraServices)?.toSet() ?: emptySet()
+        val customUrls =
+            intent.getStringArrayListExtra(extraCustomUrls)?.toSet() ?: emptySet()
         val intervalMinutes = intent.getIntExtra(extraIntervalMinutes, defaultIntervalMinutes)
         currentCheckIntervalMs = resolveCheckIntervalMs(intervalMinutes)
+        BrowserUrlMonitorState.updateTargets(customUrls)
         targetPackages = services
             .flatMap { service -> packagesForService(service) }
             .toSet()
@@ -72,11 +76,16 @@ class UsageMonitorService : Service() {
 
     private fun emitForegroundMatchEvent() {
         val packageName = readForegroundPackageName()
-        val matchedTarget = packageName != null && targetPackages.contains(packageName)
+        val packageMatched = packageName != null && targetPackages.contains(packageName)
+        val urlMatched = BrowserUrlMonitorState.isMatchedForForegroundPackage(packageName)
+        val matchedTarget = packageMatched || urlMatched
+        val currentUrl = BrowserUrlMonitorState.latestUrlForForegroundPackage(packageName)
         PopMonitoringEventBus.emit(
             mapOf(
                 "matchedTarget" to matchedTarget,
                 "packageName" to packageName,
+                "urlMatched" to urlMatched,
+                "url" to currentUrl,
                 "timestampMs" to System.currentTimeMillis(),
             ),
         )
@@ -145,6 +154,7 @@ class UsageMonitorService : Service() {
         private const val actionStart = "com.example.poptest.action.START_MONITORING"
         private const val actionStop = "com.example.poptest.action.STOP_MONITORING"
         private const val extraServices = "services"
+        private const val extraCustomUrls = "customUrls"
         private const val extraIntervalMinutes = "intervalMinutes"
 
         private const val notificationId = 4001
@@ -156,15 +166,22 @@ class UsageMonitorService : Service() {
         private const val defaultIntervalMinutes = 30
         private const val usageWindowMs = 15_000L
 
-        fun start(context: Context, services: List<String>, intervalMinutes: Int) {
+        fun start(
+            context: Context,
+            services: List<String>,
+            customUrls: List<String>,
+            intervalMinutes: Int,
+        ) {
             val intent = Intent(context, UsageMonitorService::class.java)
                 .setAction(actionStart)
                 .putStringArrayListExtra(extraServices, ArrayList(services))
+                .putStringArrayListExtra(extraCustomUrls, ArrayList(customUrls))
                 .putExtra(extraIntervalMinutes, intervalMinutes)
             ContextCompat.startForegroundService(context, intent)
         }
 
         fun stop(context: Context) {
+            BrowserUrlMonitorState.clear()
             val intent = Intent(context, UsageMonitorService::class.java).setAction(actionStop)
             context.startService(intent)
         }

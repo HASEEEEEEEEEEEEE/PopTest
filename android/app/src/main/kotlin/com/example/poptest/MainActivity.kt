@@ -56,12 +56,15 @@ class MainActivity : FlutterActivity() {
                 val services = (args?.get("services") as? List<*>)
                     ?.mapNotNull { item -> item as? String }
                     ?: emptyList()
+                val customUrls = (args?.get("customUrls") as? List<*>)
+                    ?.mapNotNull { item -> item as? String }
+                    ?: emptyList()
                 val intervalMinutes = (args?.get("intervalMinutes") as? Number)?.toInt() ?: 30
-                if (!UsageMonitorService.isUsageAccessGranted(this)) {
+                if (!hasRequiredPermissions(customUrls)) {
                     result.success(false)
                     return
                 }
-                UsageMonitorService.start(this, services, intervalMinutes)
+                UsageMonitorService.start(this, services, customUrls, intervalMinutes)
                 result.success(true)
             }
 
@@ -75,6 +78,20 @@ class MainActivity : FlutterActivity() {
                 result.success(null)
             }
 
+            "openAccessibilitySettings" -> {
+                openAccessibilitySettings()
+                result.success(null)
+            }
+
+            "getMonitoringPermissionStatus" -> {
+                result.success(
+                    mapOf(
+                        "usageAccess" to UsageMonitorService.isUsageAccessGranted(this),
+                        "accessibilityEnabled" to AccessibilityMonitorService.isAccessibilityEnabled(this),
+                    ),
+                )
+            }
+
             else -> result.notImplemented()
         }
     }
@@ -84,6 +101,21 @@ class MainActivity : FlutterActivity() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         startActivity(intent)
+    }
+
+    private fun openAccessibilitySettings() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
+    }
+
+    private fun hasRequiredPermissions(customUrls: List<String>): Boolean {
+        val usageGranted = UsageMonitorService.isUsageAccessGranted(this)
+        if (!usageGranted) return false
+        val needsAccessibility = customUrls.any { it.isNotBlank() }
+        if (!needsAccessibility) return true
+        return AccessibilityMonitorService.isAccessibilityEnabled(this)
     }
 
     companion object {
