@@ -61,11 +61,10 @@ object BrowserUrlMonitorState {
             val patternHost = extractHost(pattern)
             val hostMatched = hostMatches(normalizedHost, patternHost)
             if (!hostMatched) return@any false
-            val hasPathConstraint = pattern.contains("/")
+            val hasPathConstraint = hasPathConstraint(pattern)
             if (!hasPathConstraint) return@any true
             if (!normalizedUrl.startsWith(pattern)) return@any false
-            if (normalizedUrl.length == pattern.length) return@any true
-            val nextChar = normalizedUrl[pattern.length]
+            val nextChar = normalizedUrl.getOrNull(pattern.length) ?: return@any true
             nextChar == '/' || nextChar == '?' || nextChar == '#'
         }
     }
@@ -91,5 +90,14 @@ object BrowserUrlMonitorState {
     private fun hostMatches(urlHost: String, patternHost: String): Boolean {
         if (urlHost.isBlank() || patternHost.isBlank()) return false
         return urlHost == patternHost || urlHost.endsWith(".$patternHost")
+    }
+
+    private fun hasPathConstraint(pattern: String): Boolean {
+        val pathIndex = pattern.indexOf('/')
+        if (pathIndex < 0) return false
+        val queryIndex = pattern.indexOf('?').let { if (it >= 0) it else Int.MAX_VALUE }
+        val fragmentIndex = pattern.indexOf('#').let { if (it >= 0) it else Int.MAX_VALUE }
+        val firstSuffixIndex = minOf(queryIndex, fragmentIndex)
+        return pathIndex < firstSuffixIndex
     }
 }

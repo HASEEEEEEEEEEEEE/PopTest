@@ -122,6 +122,7 @@ class AccessibilityMonitorService : AccessibilityService() {
     }
 
     private fun looksLikeUrl(text: String): Boolean {
+        // Lowercase normalization keeps regex simple and locale-stable.
         val candidate = text.lowercase(Locale.US)
         if (candidate.startsWith("http://") || candidate.startsWith("https://")) return true
         if (candidate.startsWith("about:")) return true
