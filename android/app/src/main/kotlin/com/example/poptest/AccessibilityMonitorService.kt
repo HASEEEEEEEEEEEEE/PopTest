@@ -13,8 +13,12 @@ class AccessibilityMonitorService : AccessibilityService() {
         val packageName = event?.packageName?.toString() ?: return
         if (!browserPackages.contains(packageName)) return
         val root = rootInActiveWindow ?: return
-        val url = findUrl(root, packageName)
-        BrowserUrlMonitorState.updateBrowserUrl(packageName, url)
+        try {
+            val url = findUrl(root, packageName)
+            BrowserUrlMonitorState.updateBrowserUrl(packageName, url)
+        } finally {
+            root.recycle()
+        }
     }
 
     override fun onInterrupt() = Unit
@@ -63,9 +67,15 @@ class AccessibilityMonitorService : AccessibilityService() {
         for (viewId in knownIds) {
             val nodes = root.findAccessibilityNodeInfosByViewId(viewId)
             if (nodes.isNullOrEmpty()) continue
-            val text = nodes.firstNotNullOfOrNull { node ->
-                node.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }
-                    ?: node.contentDescription?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            var text: String? = null
+            try {
+                for (node in nodes) {
+                    text = node.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+                        ?: node.contentDescription?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+                    if (!text.isNullOrBlank()) break
+                }
+            } finally {
+                nodes.forEach { node -> node.recycle() }
             }
             if (!text.isNullOrBlank()) return text
         }
@@ -73,24 +83,48 @@ class AccessibilityMonitorService : AccessibilityService() {
     }
 
     private fun findLikelyUrlByTraversal(root: AccessibilityNodeInfo): String? {
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
-        while (queue.isNotEmpty()) {
-            val node = queue.removeFirst()
-            val text = node.text?.toString()?.trim()
-                ?: node.contentDescription?.toString()?.trim()
-            if (!text.isNullOrBlank() && looksLikeUrl(text)) {
-                return text
+        val queue = ArrayDeque<TraversalNode>()
+        queue.add(TraversalNode(root, shouldRecycle = false))
+        var foundUrl: String? = null
+        try {
+            while (queue.isNotEmpty()) {
+                val (node, shouldRecycle) = queue.removeFirst()
+                try {
+                    val text = node.text?.toString()?.trim()
+                        ?: node.contentDescription?.toString()?.trim()
+                    if (!text.isNullOrBlank() && looksLikeUrl(text)) {
+                        foundUrl = text
+                        break
+                    }
+                    for (i in 0 until node.childCount) {
+                        node.getChild(i)?.let { child ->
+                            queue.addLast(TraversalNode(child, shouldRecycle = true))
+                        }
+                    }
+                } finally {
+                    if (shouldRecycle) {
+                        node.recycle()
+                    }
+                }
             }
-            for (i in 0 until node.childCount) {
-                node.getChild(i)?.let(queue::addLast)
+            return foundUrl
+        } finally {
+            while (queue.isNotEmpty()) {
+                val queued = queue.removeFirst()
+                if (queued.shouldRecycle) {
+                    queued.node.recycle()
+                }
             }
         }
-        return null
     }
 
     private fun looksLikeUrl(text: String): Boolean {
         val candidate = text.lowercase(Locale.US)
         return candidate.contains("://") || candidate.contains('.') || candidate.startsWith("about:")
     }
+
+    private data class TraversalNode(
+        val node: AccessibilityNodeInfo,
+        val shouldRecycle: Boolean,
+    )
 }
