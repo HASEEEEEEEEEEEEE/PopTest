@@ -176,15 +176,20 @@ final nativePopMonitoringBridgeProvider = Provider<NativePopMonitoringBridge>(
   (_) => NativePopMonitoringBridge(),
 );
 
+// 修正後
 final popMonitoringProvider = Provider<PopMonitoringManager>((ref) {
-  final manager = PopMonitoringManager(ref, ref.read(nativePopMonitoringBridgeProvider));
+  final manager =
+      PopMonitoringManager(ref, ref.read(nativePopMonitoringBridgeProvider));
   ref.listen<bool>(popStudyActiveProvider, (previous, next) {
-    final metrics = ref.read(popMetricsProvider.notifier);
-    if (next && previous != true) {
-      metrics.startSession(DateTime.now());
-    } else if (!next && previous == true) {
-      metrics.stopSession();
-    }
+    Future.microtask(() {
+      // ← ここで囲む
+      final metrics = ref.read(popMetricsProvider.notifier);
+      if (next && previous != true) {
+        metrics.startSession(DateTime.now());
+      } else if (!next && previous == true) {
+        metrics.stopSession();
+      }
+    });
   }, fireImmediately: true);
   manager.start();
   ref.onDispose(manager.dispose);
