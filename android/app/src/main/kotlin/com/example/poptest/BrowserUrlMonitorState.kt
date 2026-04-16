@@ -56,9 +56,7 @@ object BrowserUrlMonitorState {
         if (url.isNullOrBlank()) return false
         if (targetPatterns.isEmpty()) return false
         val normalizedUrl = normalizeUrl(url)
-        return targetPatterns.any { pattern ->
-            normalizedUrl.contains(pattern) || url.lowercase(Locale.US).contains(pattern)
-        }
+        return targetPatterns.any { pattern -> normalizedUrl.contains(pattern) }
     }
 
     private fun normalizePattern(value: String): String? {

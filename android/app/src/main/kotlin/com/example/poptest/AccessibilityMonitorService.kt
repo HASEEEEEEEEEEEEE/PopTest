@@ -6,6 +6,7 @@ import android.content.Context
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import java.util.Locale
 
 class AccessibilityMonitorService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -89,7 +90,7 @@ class AccessibilityMonitorService : AccessibilityService() {
     }
 
     private fun looksLikeUrl(text: String): Boolean {
-        val candidate = text.lowercase()
+        val candidate = text.lowercase(Locale.US)
         return candidate.contains("://") || candidate.contains('.') || candidate.startsWith("about:")
     }
 }
