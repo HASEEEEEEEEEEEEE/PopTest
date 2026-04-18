@@ -136,7 +136,8 @@ class UsageMonitorService : Service() {
         lastTrackingAtMs = nowMs
         if (!matchedTarget || previous == null) return
         val rawElapsedSeconds = ((nowMs - previous).coerceAtLeast(0L) / 1000L).toInt()
-        val maxAllowedElapsedSeconds = ((currentCheckIntervalMs * 2) / 1000L).toInt().coerceAtLeast(1)
+        val maxAllowedElapsedSeconds =
+            ((currentCheckIntervalMs * maxElapsedMultiplier) / 1000L).toInt().coerceAtLeast(1)
         val elapsedSeconds = rawElapsedSeconds.coerceAtMost(maxAllowedElapsedSeconds)
         if (elapsedSeconds <= 0) return
         viewingSecondsForCurrentInterval += elapsedSeconds
@@ -329,6 +330,7 @@ class UsageMonitorService : Service() {
         private const val defaultIntervalMinutes = 30
         private const val defaultPopCount = 1
         private const val usageWindowMs = 15_000L
+        private const val maxElapsedMultiplier = 2L
 
         private const val eventTypeTracking = "tracking"
         private const val eventTypePopupShown = "popupShown"

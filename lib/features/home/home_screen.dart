@@ -20,7 +20,7 @@ final nowTickerProvider = StreamProvider.autoDispose<DateTime>((ref) async* {
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
-  static const int maxTrackingGapSeconds = 30;
+  static const int _maxTrackingGapSeconds = 30;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -60,7 +60,7 @@ class HomeScreen extends ConsumerWidget {
         ? now
             .difference(lastTrackedAt)
             .inSeconds
-            .clamp(0, maxTrackingGapSeconds)
+            .clamp(0, _maxTrackingGapSeconds)
         : 0;
     final estimatedViewingSeconds =
         metrics.viewingSecondsForCurrentInterval + extraSeconds;
