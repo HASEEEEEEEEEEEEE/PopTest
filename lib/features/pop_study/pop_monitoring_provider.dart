@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../routing/router.dart';
@@ -21,7 +20,7 @@ class PopMonitoringManager {
   final NativePopMonitoringBridge _nativeBridge;
 
   StreamSubscription<NativePopMonitoringEvent>? _eventSubscription;
-  bool _popupOpen = false;
+  StreamSubscription<String>? _startPopStudySubscription;
   bool _syncInProgress = false;
   bool _syncPending = false;
 
@@ -36,6 +35,16 @@ class PopMonitoringManager {
         unawaited(_syncNativeMonitoring());
       },
     );
+    _startPopStudySubscription = _nativeBridge.startPopStudyStream().listen(
+      (deckId) {
+        unawaited(_openPopStudyDeck(deckId));
+      },
+      onError: (error, stackTrace) {
+        debugPrint('Native startPopStudy stream error: $error');
+        debugPrint('$stackTrace');
+      },
+    );
+    unawaited(_consumePendingStartDeck());
     _ref.listen<bool>(
       popStudyActiveProvider,
       (_, __) => unawaited(_syncNativeMonitoring()),
@@ -53,8 +62,11 @@ class PopMonitoringManager {
 
   void dispose() {
     _eventSubscription?.cancel();
+    _startPopStudySubscription?.cancel();
     _eventSubscription = null;
+    _startPopStudySubscription = null;
     unawaited(_nativeBridge.stopMonitoring());
+    _nativeBridge.dispose();
   }
 
   Future<void> _syncNativeMonitoring() async {
@@ -93,6 +105,7 @@ class PopMonitoringManager {
     }
     final started = await _nativeBridge.startMonitoring(
       NativePopMonitoringConfig(
+        deckId: deckId,
         services: settings.services,
         customUrls: settings.customUrls,
         intervalMinutes: settings.intervalMinutes,
@@ -102,18 +115,33 @@ class PopMonitoringManager {
     if (started) return;
 
     final status =
-        await _nativeBridge.getPermissionStatus(); // ← getPermissionStatus
-    if (status['accessibilityEnabled'] != true) {
-      await _nativeBridge.openAccessibilitySettings();
-    } else {
+        await _nativeBridge.getPermissionStatus();
+    if (status['usageAccess'] != true) {
       await _nativeBridge.openUsageAccessSettings();
+    } else if (status['accessibilityEnabled'] != true) {
+      await _nativeBridge.openAccessibilitySettings();
+    } else if (status['overlayEnabled'] != true) {
+      await _nativeBridge.openOverlaySettings();
     }
     await _ref.read(popStudyActiveProvider.notifier).setActive(false);
   }
 
   Future<void> _onNativeEvent(NativePopMonitoringEvent event) async {
     final active = _ref.read(popStudyActiveProvider);
-    if (!active || _popupOpen) return;
+    if (!active) return;
+
+    if (event.type == NativePopMonitoringEventType.popupShown) {
+      await _ref.read(popMetricsProvider.notifier).recordPopupShown(event.occurredAt);
+      return;
+    }
+    if (event.type == NativePopMonitoringEventType.popupSnooze) {
+      await _ref.read(popMetricsProvider.notifier).recordPopupSnooze();
+      return;
+    }
+    if (event.type == NativePopMonitoringEventType.popupStart) {
+      await _ref.read(popMetricsProvider.notifier).recordPopupStart(event.occurredAt);
+      return;
+    }
 
     final deckId = _ref.read(selectedDeckProvider);
     if (deckId == null || deckId.isEmpty) return;
@@ -122,60 +150,22 @@ class PopMonitoringManager {
         settings.services.isNotEmpty || settings.customUrls.isNotEmpty;
     if (!hasTargets) return;
 
-    final now = event.occurredAt;
     await _ref
         .read(popMetricsProvider.notifier)
-        .recordTrackedEvent(matchedTarget: event.matchedTarget, at: now);
-    if (!event.matchedTarget) return;
+        .recordTrackedEvent(matchedTarget: event.matchedTarget, at: event.occurredAt);
+  }
 
+  Future<void> _consumePendingStartDeck() async {
+    final deckId = await _nativeBridge.consumePendingStartDeckId();
+    if (deckId == null || deckId.isEmpty) return;
+    await _openPopStudyDeck(deckId);
+  }
+
+  Future<void> _openPopStudyDeck(String deckId) async {
     final router = _ref.read(routerProvider);
-    final locationPath = router.routeInformationProvider.value.uri.path;
-    final popPath = '/decks/$deckId/pop';
-    if (locationPath == popPath) return;
-
-    final interval = Duration(minutes: settings.intervalMinutes);
-    final metrics = _ref.read(popMetricsProvider);
-    if (!hasReachedNextStudyTime(metrics, interval, now)) {
-      return;
-    }
-
-    await _ref.read(popMetricsProvider.notifier).recordPopupShown(now);
-    _popupOpen = true;
-    try {
-      final ctx = rootNavigatorKey.currentContext;
-      if (ctx == null) return;
-      await showDialog<void>(
-        context: ctx,
-        barrierDismissible: false,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('ポップ学習'),
-            content: Text('学習のタイミングです。${settings.popCount}問の学習を開始します。'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  _ref.read(popMetricsProvider.notifier).recordPopupSnooze();
-                  Navigator.of(dialogContext).pop();
-                },
-                child: const Text('後で'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  _ref
-                      .read(popMetricsProvider.notifier)
-                      .recordPopupStart(DateTime.now());
-                  Navigator.of(dialogContext).pop();
-                  router.go('/decks/$deckId/pop');
-                },
-                child: const Text('開始'),
-              ),
-            ],
-          );
-        },
-      );
-    } finally {
-      _popupOpen = false;
-    }
+    final path = '/decks/$deckId/pop';
+    if (router.routeInformationProvider.value.uri.path == path) return;
+    router.go(path);
   }
 }
 

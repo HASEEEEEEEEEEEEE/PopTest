@@ -53,18 +53,23 @@ class HomeScreen extends ConsumerWidget {
         effectivePopSettings.customUrls.isNotEmpty;
     final canStart = selectedDeckId != null && hasTargets;
 
-    // 残り視聴秒数でカウントダウン
+    // 最後のイベントからの経過時間を補間して表示を更新
+    final lastTrackedAt = metrics.lastTrackedAt;
+    final extraSeconds = (isActive && lastTrackedAt != null)
+        ? now.difference(lastTrackedAt).inSeconds.clamp(0, 60)
+        : 0;
+    final estimatedViewingSeconds =
+        metrics.viewingSecondsForCurrentInterval + extraSeconds;
     final intervalSeconds = effectivePopSettings.intervalMinutes * 60;
     final remainingSeconds =
-        (intervalSeconds - metrics.viewingSecondsForCurrentInterval)
-            .clamp(0, intervalSeconds);
+        (intervalSeconds - estimatedViewingSeconds).clamp(0, intervalSeconds);
     final countdownLabel = metrics.sessionStartedAt == null
         ? '--:--'
         : formatDurationAsMinutesSeconds(
             Duration(seconds: remainingSeconds),
           );
     final watchedLabel = formatDurationAsMinutesSeconds(
-      Duration(seconds: metrics.matchedActiveSeconds),
+      Duration(seconds: metrics.matchedActiveSeconds + extraSeconds),
     );
 
     return Scaffold(

@@ -4,22 +4,24 @@ import android.accessibilityservice.AccessibilityService
 import android.content.ComponentName
 import android.content.Context
 import android.provider.Settings
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.Locale
-import android.util.Log  // ← この1行を追加
 
 class AccessibilityMonitorService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val packageName = event?.packageName?.toString() ?: return
-        Log.d("AccessibilityMonitor", "Event from: $packageName")  // 追加
         if (!browserPackages.contains(packageName)) return
         val root = rootInActiveWindow ?: return
         try {
             val url = findUrl(root, packageName)
-            Log.d("AccessibilityMonitor", "URL: $url")  // 追加
-            BrowserUrlMonitorState.updateBrowserUrl(packageName, url)
-            Log.d("AccessibilityMonitor", "Service connected")  // 追加
+            if (url != null) {
+                Log.d("AccessibilityMonitor", "URL: $url")
+                BrowserUrlMonitorState.updateBrowserUrl(packageName, url)
+            } else {
+                BrowserUrlMonitorState.keepLastUrlForPackage(packageName)
+            }
         } finally {
             root.recycle()
         }
