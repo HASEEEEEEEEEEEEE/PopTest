@@ -36,6 +36,13 @@ object BrowserUrlMonitorState {
         }
     }
 
+    fun keepLastUrlForPackage(packageName: String) {
+        synchronized(lock) {
+            if (latestPackageName == packageName) return
+            latestPackageName = packageName
+        }
+    }
+
     fun isMatchedForForegroundPackage(foregroundPackage: String?): Boolean {
         if (foregroundPackage == null) return false
         synchronized(lock) {
