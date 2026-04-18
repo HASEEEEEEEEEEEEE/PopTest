@@ -12,6 +12,8 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var methodChannel: MethodChannel? = null
     private var eventChannel: EventChannel? = null
+    private val pendingStartDeckLock = Any()
+    private var pendingStartDeckId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -185,7 +187,5 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val methodChannelName = "poptest.pop_monitoring/methods"
         private const val eventChannelName = "poptest.pop_monitoring/events"
-        private val pendingStartDeckLock = Any()
-        private var pendingStartDeckId: String? = null
     }
 }

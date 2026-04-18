@@ -261,6 +261,5 @@ class NativePopMonitoringBridge {
 
   void dispose() {
     _startPopStudyController.close();
-    _methodChannel.setMethodCallHandler(null);
   }
 }
