@@ -20,6 +20,7 @@ final nowTickerProvider = StreamProvider.autoDispose<DateTime>((ref) async* {
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
+  // Matches native polling upper bound (30s) to avoid overstating stale gaps.
   static const int _maxTrackingGapSeconds = 30;
 
   @override

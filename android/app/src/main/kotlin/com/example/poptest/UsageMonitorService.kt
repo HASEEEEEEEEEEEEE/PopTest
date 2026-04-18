@@ -83,7 +83,7 @@ class UsageMonitorService : Service() {
         val customUrls =
             intent.getStringArrayListExtra(extraCustomUrls)?.toSet() ?: emptySet()
         val intervalMinutes = intent.getIntExtra(extraIntervalMinutes, defaultIntervalMinutes)
-        popCount = intent.getIntExtra(extraPopCount, defaultPopCount).coerceAtLeast(1)
+        popCount = intent.getIntExtra(extraPopCount, defaultPopCount).coerceIn(1, maxPopCount)
         targetDeckId = intent.getStringExtra(extraDeckId)?.trim()?.takeIf { it.isNotEmpty() }
         popupIntervalSeconds = intervalMinutes.coerceAtLeast(1) * 60
         viewingSecondsForCurrentInterval = 0
@@ -329,6 +329,7 @@ class UsageMonitorService : Service() {
         private const val maxCheckIntervalMs = 30_000L
         private const val defaultIntervalMinutes = 30
         private const val defaultPopCount = 1
+        private const val maxPopCount = 50
         private const val usageWindowMs = 15_000L
         private const val maxElapsedMultiplier = 2L
 
