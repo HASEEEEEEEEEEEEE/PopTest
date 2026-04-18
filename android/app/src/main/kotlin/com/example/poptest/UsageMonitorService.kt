@@ -136,8 +136,8 @@ class UsageMonitorService : Service() {
         lastTrackingAtMs = nowMs
         if (!matchedTarget || previous == null) return
         val rawElapsedSeconds = ((nowMs - previous).coerceAtLeast(0L) / 1000L).toInt()
-        val maxReasonableElapsedSeconds = ((currentCheckIntervalMs * 2) / 1000L).toInt().coerceAtLeast(1)
-        val elapsedSeconds = rawElapsedSeconds.coerceAtMost(maxReasonableElapsedSeconds)
+        val maxAllowedElapsedSeconds = ((currentCheckIntervalMs * 2) / 1000L).toInt().coerceAtLeast(1)
+        val elapsedSeconds = rawElapsedSeconds.coerceAtMost(maxAllowedElapsedSeconds)
         if (elapsedSeconds <= 0) return
         viewingSecondsForCurrentInterval += elapsedSeconds
     }

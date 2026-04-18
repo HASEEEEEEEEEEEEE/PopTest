@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityService
 import android.content.ComponentName
 import android.content.Context
 import android.provider.Settings
-import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.Locale
@@ -17,7 +16,6 @@ class AccessibilityMonitorService : AccessibilityService() {
         try {
             val url = findUrl(root, packageName)
             if (url != null) {
-                Log.d("AccessibilityMonitor", "URL: $url")
                 BrowserUrlMonitorState.updateBrowserUrl(packageName, url)
             } else {
                 BrowserUrlMonitorState.keepLastUrlForPackage(packageName)
