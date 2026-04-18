@@ -21,6 +21,7 @@ class PopMetricsNotifier extends Notifier<PopMetrics> {
       clearLastStudyStartAt: true,
       clearLastPopupAt: true,
       matchedActiveSeconds: 0,
+      clearViewingSeconds: true,
     ));
   }
 
@@ -28,6 +29,7 @@ class PopMetricsNotifier extends Notifier<PopMetrics> {
     await _persist(state.copyWith(
       clearSessionStartedAt: true,
       clearLastTrackedAt: true,
+      clearViewingSeconds: true,
     ));
   }
 
@@ -35,6 +37,7 @@ class PopMetricsNotifier extends Notifier<PopMetrics> {
     await _persist(state.copyWith(
       popupShownCount: state.popupShownCount + 1,
       lastPopupAt: at,
+      clearViewingSeconds: true,
     ));
   }
 
@@ -49,6 +52,8 @@ class PopMetricsNotifier extends Notifier<PopMetrics> {
       trackedEventCount: state.trackedEventCount + 1,
       matchedEventCount: state.matchedEventCount + (matchedTarget ? 1 : 0),
       matchedActiveSeconds: state.matchedActiveSeconds + increment,
+      viewingSecondsForCurrentInterval:
+          state.viewingSecondsForCurrentInterval + increment,
       lastTrackedAt: at,
     ));
   }
@@ -71,24 +76,13 @@ final popMetricsProvider = NotifierProvider<PopMetricsNotifier, PopMetrics>(
   PopMetricsNotifier.new,
 );
 
-DateTime? computeNextStudyAt(PopMetrics metrics, Duration interval) {
-  final sessionStartedAt = metrics.sessionStartedAt;
-  if (sessionStartedAt == null) return null;
-  final baseline = metrics.lastStudyStartAt != null &&
-          metrics.lastStudyStartAt!.isAfter(sessionStartedAt)
-      ? metrics.lastStudyStartAt!
-      : sessionStartedAt;
-  return baseline.add(interval);
-}
-
 bool hasReachedNextStudyTime(
   PopMetrics metrics,
   Duration interval,
   DateTime now,
 ) {
-  final next = computeNextStudyAt(metrics, interval);
-  if (next == null) return false;
-  return !now.isBefore(next);
+  if (metrics.sessionStartedAt == null) return false;
+  return metrics.viewingSecondsForCurrentInterval >= interval.inSeconds;
 }
 
 String formatDurationAsMinutesSeconds(Duration duration) {

@@ -10,8 +10,10 @@ class PopMetrics {
     required this.lastStudyStartAt,
     required this.sessionStartedAt,
     required this.lastTrackedAt,
+    required this.viewingSecondsForCurrentInterval, // 追加
   });
 
+  final int viewingSecondsForCurrentInterval; // 追加
   final int trackedEventCount;
   final int matchedEventCount;
   final int matchedActiveSeconds;
@@ -38,6 +40,8 @@ class PopMetrics {
     bool clearLastStudyStartAt = false,
     bool clearSessionStartedAt = false,
     bool clearLastTrackedAt = false,
+    int? viewingSecondsForCurrentInterval,
+    bool clearViewingSeconds = false,
   }) {
     return PopMetrics(
       trackedEventCount: trackedEventCount ?? this.trackedEventCount,
@@ -46,8 +50,7 @@ class PopMetrics {
       popupShownCount: popupShownCount ?? this.popupShownCount,
       popupStartCount: popupStartCount ?? this.popupStartCount,
       popupSnoozeCount: popupSnoozeCount ?? this.popupSnoozeCount,
-      lastPopupAt:
-          clearLastPopupAt ? null : (lastPopupAt ?? this.lastPopupAt),
+      lastPopupAt: clearLastPopupAt ? null : (lastPopupAt ?? this.lastPopupAt),
       lastStudyStartAt: clearLastStudyStartAt
           ? null
           : (lastStudyStartAt ?? this.lastStudyStartAt),
@@ -56,19 +59,23 @@ class PopMetrics {
           : (sessionStartedAt ?? this.sessionStartedAt),
       lastTrackedAt:
           clearLastTrackedAt ? null : (lastTrackedAt ?? this.lastTrackedAt),
+      viewingSecondsForCurrentInterval: clearViewingSeconds
+          ? 0
+          : (viewingSecondsForCurrentInterval ??
+              this.viewingSecondsForCurrentInterval),
     );
   }
 
   factory PopMetrics.defaults() => const PopMetrics(
-        trackedEventCount: 0,
-        matchedEventCount: 0,
-        matchedActiveSeconds: 0,
-        popupShownCount: 0,
-        popupStartCount: 0,
-        popupSnoozeCount: 0,
-        lastPopupAt: null,
-        lastStudyStartAt: null,
-        sessionStartedAt: null,
-        lastTrackedAt: null,
-      );
+      trackedEventCount: 0,
+      matchedEventCount: 0,
+      matchedActiveSeconds: 0,
+      popupShownCount: 0,
+      popupStartCount: 0,
+      popupSnoozeCount: 0,
+      lastPopupAt: null,
+      lastStudyStartAt: null,
+      sessionStartedAt: null,
+      lastTrackedAt: null,
+      viewingSecondsForCurrentInterval: 0);
 }

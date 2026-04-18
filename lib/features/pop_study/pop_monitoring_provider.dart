@@ -100,16 +100,13 @@ class PopMonitoringManager {
       ),
     );
     if (started) return;
-    final permissions = await _nativeBridge.getPermissionStatus();
-    final hasUsageAccess = permissions['usageAccess'] == true;
-    final requiresAccessibilityPermission = settings.customUrls.any(
-      (url) => url.trim().isNotEmpty,
-    );
-    final hasAccessibility = permissions['accessibilityEnabled'] == true;
-    if (!hasUsageAccess) {
-      await _nativeBridge.openUsageAccessSettings();
-    } else if (requiresAccessibilityPermission && !hasAccessibility) {
+
+    final status =
+        await _nativeBridge.getPermissionStatus(); // ← getPermissionStatus
+    if (status['accessibilityEnabled'] != true) {
       await _nativeBridge.openAccessibilitySettings();
+    } else {
+      await _nativeBridge.openUsageAccessSettings();
     }
     await _ref.read(popStudyActiveProvider.notifier).setActive(false);
   }

@@ -68,11 +68,25 @@ class UsageMonitorService : Service() {
             intent.getStringArrayListExtra(extraCustomUrls)?.toSet() ?: emptySet()
         val intervalMinutes = intent.getIntExtra(extraIntervalMinutes, defaultIntervalMinutes)
         currentCheckIntervalMs = resolveCheckIntervalMs(intervalMinutes)
-        BrowserUrlMonitorState.updateTargets(customUrls)
         targetPackages = services
             .flatMap { service -> packagesForService(service) }
             .toSet()
+        // サービスに対応するブラウザURLパターンを自動追加
+        val serviceUrls = services.flatMap { urlPatternsForService(it) }.toSet()
+        BrowserUrlMonitorState.updateTargets(customUrls + serviceUrls)
     }
+
+    // 追加するメソッド（packagesForService の隣に置く）
+    private fun urlPatternsForService(service: String): Set<String> {
+        return when (service) {
+            "youtube"   -> setOf("youtube.com", "youtu.be")
+            "twitter"   -> setOf("twitter.com", "x.com")
+            "instagram" -> setOf("instagram.com")
+            "tiktok"    -> setOf("tiktok.com")
+            else        -> emptySet()
+        }
+    }
+    
 
     private fun emitForegroundMatchEvent() {
         val packageName = readForegroundPackageName()

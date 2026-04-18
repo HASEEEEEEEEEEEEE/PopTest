@@ -103,9 +103,9 @@ class AppPrefs {
 
     final intervalMinutes = _prefs.getInt(_keyPopIntervalMinutes) ??
         PopSettings.defaultIntervalMinutes;
-    final popCount =
-        _prefs.getInt(_keyPopCount) ?? PopSettings.defaultPopCount;
-    final customUrls = _prefs.getStringList(_keyPopCustomUrls) ?? const <String>[];
+    final popCount = _prefs.getInt(_keyPopCount) ?? PopSettings.defaultPopCount;
+    final customUrls =
+        _prefs.getStringList(_keyPopCustomUrls) ?? const <String>[];
 
     return PopSettings(
       services: services,
@@ -136,7 +136,10 @@ class AppPrefs {
     }
     await _prefs.setStringList(
       _keyPopCustomUrls,
-      customUrls.map((url) => url.trim()).where((url) => url.isNotEmpty).toList(),
+      customUrls
+          .map((url) => url.trim())
+          .where((url) => url.isNotEmpty)
+          .toList(),
     );
   }
 
@@ -159,11 +162,13 @@ class AppPrefs {
             .whereType<PopService>()
             .toSet();
     final customUrls =
-        _prefs.getStringList('$_prefixDeckPopCustomUrls$deckId') ?? const <String>[];
-    final intervalMinutes = _prefs.getInt('$_prefixDeckPopIntervalMinutes$deckId') ??
-        PopSettings.defaultIntervalMinutes;
-    final popCount =
-        _prefs.getInt('$_prefixDeckPopCount$deckId') ?? PopSettings.defaultPopCount;
+        _prefs.getStringList('$_prefixDeckPopCustomUrls$deckId') ??
+            const <String>[];
+    final intervalMinutes =
+        _prefs.getInt('$_prefixDeckPopIntervalMinutes$deckId') ??
+            PopSettings.defaultIntervalMinutes;
+    final popCount = _prefs.getInt('$_prefixDeckPopCount$deckId') ??
+        PopSettings.defaultPopCount;
 
     return DeckPopSettings(
       useGlobal: useGlobal,
@@ -179,7 +184,8 @@ class AppPrefs {
     );
   }
 
-  Future<void> setDeckPopSettings(String deckId, DeckPopSettings settings) async {
+  Future<void> setDeckPopSettings(
+      String deckId, DeckPopSettings settings) async {
     await _prefs.setBool('$_prefixDeckPopUseGlobal$deckId', settings.useGlobal);
     if (settings.services.isEmpty) {
       await _prefs.remove('$_prefixDeckPopServices$deckId');
@@ -207,7 +213,8 @@ class AppPrefs {
     await _prefs.setString('$_prefixDeckName$deckId', name);
   }
 
-  String? getDeckName(String deckId) => _prefs.getString('$_prefixDeckName$deckId');
+  String? getDeckName(String deckId) =>
+      _prefs.getString('$_prefixDeckName$deckId');
 
   Future<void> setDeckCards(String deckId, List<CardModel> cards) async {
     final rows = cards
@@ -241,7 +248,10 @@ class AppPrefs {
       final front = cardData['front'];
       final back = cardData['back'];
       final state = cardData['state'];
-      if (id is! String || front is! String || back is! String || state is! String) {
+      if (id is! String ||
+          front is! String ||
+          back is! String ||
+          state is! String) {
         continue;
       }
       cards.add(CardModel(
@@ -269,14 +279,18 @@ class AppPrefs {
   static const _keyPopMetricShownCount = 'pop_metric_shown_count';
   static const _keyPopMetricStartCount = 'pop_metric_start_count';
   static const _keyPopMetricSnoozeCount = 'pop_metric_snooze_count';
-  static const _keyPopMetricTrackedEventCount = 'pop_metric_tracked_event_count';
-  static const _keyPopMetricMatchedEventCount = 'pop_metric_matched_event_count';
+  static const _keyPopMetricTrackedEventCount =
+      'pop_metric_tracked_event_count';
+  static const _keyPopMetricMatchedEventCount =
+      'pop_metric_matched_event_count';
   static const _keyPopMetricMatchedActiveSeconds =
       'pop_metric_matched_active_seconds';
   static const _keyPopMetricLastPopupAt = 'pop_metric_last_popup_at';
   static const _keyPopMetricLastStudyStartAt = 'pop_metric_last_study_start_at';
   static const _keyPopMetricSessionStartedAt = 'pop_metric_session_started_at';
   static const _keyPopMetricLastTrackedAt = 'pop_metric_last_tracked_at';
+  static const _keyPopMetricViewingSecondsForCurrentInterval =
+      'pop_metric_viewing_seconds_for_current_interval';
 
   /// Whether pop-study monitoring mode is currently enabled.
   bool get popStudyActive => _prefs.getBool(_keyPopStudyActive) ?? false;
@@ -293,6 +307,10 @@ class AppPrefs {
     final matched = _prefs.getInt(_keyPopMetricMatchedEventCount) ?? 0;
     final matchedActiveSeconds =
         _prefs.getInt(_keyPopMetricMatchedActiveSeconds) ?? 0;
+    final viewingSeconds = _prefs.getInt(
+          _keyPopMetricViewingSecondsForCurrentInterval,
+        ) ??
+        0;
     return PopMetrics(
       trackedEventCount: tracked,
       matchedEventCount: matched,
@@ -304,6 +322,7 @@ class AppPrefs {
       lastStudyStartAt: _readDateTime(_keyPopMetricLastStudyStartAt),
       sessionStartedAt: _readDateTime(_keyPopMetricSessionStartedAt),
       lastTrackedAt: _readDateTime(_keyPopMetricLastTrackedAt),
+      viewingSecondsForCurrentInterval: viewingSeconds,
     );
   }
 
@@ -317,6 +336,8 @@ class AppPrefs {
     await _prefs.setInt(_keyPopMetricShownCount, metrics.popupShownCount);
     await _prefs.setInt(_keyPopMetricStartCount, metrics.popupStartCount);
     await _prefs.setInt(_keyPopMetricSnoozeCount, metrics.popupSnoozeCount);
+    await _prefs.setInt(_keyPopMetricViewingSecondsForCurrentInterval,
+        metrics.viewingSecondsForCurrentInterval);
     await _writeDateTime(_keyPopMetricLastPopupAt, metrics.lastPopupAt);
     await _writeDateTime(
         _keyPopMetricLastStudyStartAt, metrics.lastStudyStartAt);
@@ -342,6 +363,6 @@ class AppPrefs {
 
 /// Must be overridden in [main] with a real [AppPrefs] instance.
 final appPrefsProvider = Provider<AppPrefs>(
-  (ref) => throw UnimplementedError(
-      'appPrefsProvider must be overridden in main()'),
+  (ref) =>
+      throw UnimplementedError('appPrefsProvider must be overridden in main()'),
 );

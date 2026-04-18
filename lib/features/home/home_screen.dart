@@ -18,10 +18,6 @@ final nowTickerProvider = StreamProvider.autoDispose<DateTime>((ref) async* {
   );
 });
 
-/// Home / Dashboard screen.
-///
-/// Displays today's study metrics, a deck selector, service selection chips,
-/// and a pop-study toggle with a live status bar.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -49,21 +45,24 @@ class HomeScreen extends ConsumerWidget {
       (d) => d.deckId == selectedDeckId,
       orElse: () => DeckData(deckId: '', name: '', cards: const []),
     );
-    final deckName =
-        selectedDeckId != null && selectedDeck.deckId.isNotEmpty
-            ? selectedDeck.name
-            : null;
+    final deckName = selectedDeckId != null && selectedDeck.deckId.isNotEmpty
+        ? selectedDeck.name
+        : null;
 
     final hasTargets = effectivePopSettings.services.isNotEmpty ||
         effectivePopSettings.customUrls.isNotEmpty;
     final canStart = selectedDeckId != null && hasTargets;
 
-    final intervalDuration =
-        Duration(minutes: effectivePopSettings.intervalMinutes);
-    final nextStudyAt = computeNextStudyAt(metrics, intervalDuration);
-    final countdownLabel = nextStudyAt == null
+    // 残り視聴秒数でカウントダウン
+    final intervalSeconds = effectivePopSettings.intervalMinutes * 60;
+    final remainingSeconds =
+        (intervalSeconds - metrics.viewingSecondsForCurrentInterval)
+            .clamp(0, intervalSeconds);
+    final countdownLabel = metrics.sessionStartedAt == null
         ? '--:--'
-        : formatDurationAsMinutesSeconds(nextStudyAt.difference(now));
+        : formatDurationAsMinutesSeconds(
+            Duration(seconds: remainingSeconds),
+          );
     final watchedLabel = formatDurationAsMinutesSeconds(
       Duration(seconds: metrics.matchedActiveSeconds),
     );
@@ -73,23 +72,19 @@ class HomeScreen extends ConsumerWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Status bar (visible only while pop-study is active) ────────
           if (isActive)
             _PopStudyStatusBar(
               deckName: deckName,
               questionsPerPopup: effectivePopSettings.popCount,
               nextStudyCountdownLabel: countdownLabel,
             ),
-
-          // ── Main content ───────────────────────────────────────────────
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('今日の学習',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text('今日の学習', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 12),
                   _MetricCard(
                     label: 'ポップ表示回数',
@@ -127,14 +122,9 @@ class HomeScreen extends ConsumerWidget {
                     icon: Icons.timer_outlined,
                     color: colorScheme.surfaceContainerLow,
                   ),
-
-                  // ── Pop study settings ─────────────────────────────────
                   const SizedBox(height: 24),
-                  Text('ポップ学習',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text('ポップ学習', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
-
-                  // Deck selector
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -160,8 +150,6 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-
-                  // Service selection
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -178,28 +166,28 @@ class HomeScreen extends ConsumerWidget {
                             spacing: 8,
                             runSpacing: 4,
                             children: PopService.values
-                                  .map(
-                                    (service) => FilterChip(
-                                       label: Text(service.label),
-                                      selected: effectivePopSettings.services
-                                          .contains(service),
-                                      onSelected: !hasSelectedDeck
-                                          ? (_) => ref
-                                              .read(popSettingsProvider.notifier)
-                                              .toggleService(service)
-                                          : useGlobalSettings
-                                              ? (_) => ref
-                                                  .read(popSettingsProvider
-                                                      .notifier)
-                                                  .toggleService(service)
-                                          : (_) => ref
-                                              .read(deckPopSettingsProvider(
-                                                      selectedDeckIdOrEmpty)
-                                                  .notifier)
-                                              .toggleService(service),
-                                    ),
-                                  )
-                                  .toList(),
+                                .map(
+                                  (service) => FilterChip(
+                                    label: Text(service.label),
+                                    selected: effectivePopSettings.services
+                                        .contains(service),
+                                    onSelected: !hasSelectedDeck
+                                        ? (_) => ref
+                                            .read(popSettingsProvider.notifier)
+                                            .toggleService(service)
+                                        : useGlobalSettings
+                                            ? (_) => ref
+                                                .read(popSettingsProvider
+                                                    .notifier)
+                                                .toggleService(service)
+                                            : (_) => ref
+                                                .read(deckPopSettingsProvider(
+                                                        selectedDeckIdOrEmpty)
+                                                    .notifier)
+                                                .toggleService(service),
+                                  ),
+                                )
+                                .toList(),
                           ),
                           const SizedBox(height: 8),
                           _CustomUrlSection(
@@ -249,8 +237,6 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-
-                  // Pop-study toggle
                   Card(
                     color: isActive
                         ? colorScheme.primaryContainer
@@ -258,10 +244,7 @@ class HomeScreen extends ConsumerWidget {
                     child: SwitchListTile(
                       title: Text(
                         isActive ? 'ポップ学習を停止' : 'ポップ学習を開始',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
                               color: isActive
                                   ? colorScheme.onPrimaryContainer
                                   : null,
@@ -298,8 +281,6 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-/// A prominent banner shown at the top of the home screen while pop-study
-/// monitoring is active.
 class _PopStudyStatusBar extends StatelessWidget {
   const _PopStudyStatusBar({
     required this.deckName,
@@ -324,8 +305,7 @@ class _PopStudyStatusBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
-          Icon(Icons.auto_stories,
-              size: 16, color: colorScheme.onPrimary),
+          Icon(Icons.auto_stories, size: 16, color: colorScheme.onPrimary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -371,7 +351,7 @@ class _CustomUrlSectionState extends State<_CustomUrlSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('対象URL（部分一致）'),
+        const Text('対象URL（前方一致）'),
         const SizedBox(height: 6),
         Row(
           children: [
@@ -436,8 +416,7 @@ class _MetricCard extends StatelessWidget {
       child: ListTile(
         leading: Icon(icon),
         title: Text(label),
-        trailing: Text(value,
-            style: Theme.of(context).textTheme.titleLarge),
+        trailing: Text(value, style: Theme.of(context).textTheme.titleLarge),
       ),
     );
   }

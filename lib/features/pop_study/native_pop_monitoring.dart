@@ -56,8 +56,7 @@ class NativePopMonitoringEvent {
 }
 
 class NativePopMonitoringBridge {
-  static const _methodChannel =
-      MethodChannel('poptest.pop_monitoring/methods');
+  static const _methodChannel = MethodChannel('poptest.pop_monitoring/methods');
   static const _eventChannel = EventChannel('poptest.pop_monitoring/events');
 
   Stream<NativePopMonitoringEvent> eventStream() async* {
