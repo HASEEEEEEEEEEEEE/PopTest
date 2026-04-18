@@ -20,6 +20,7 @@ final nowTickerProvider = StreamProvider.autoDispose<DateTime>((ref) async* {
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
+  static const int maxInterpolatedSeconds = 30;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -56,7 +57,10 @@ class HomeScreen extends ConsumerWidget {
     // 最後のイベントからの経過時間を補間して表示を更新
     final lastTrackedAt = metrics.lastTrackedAt;
     final extraSeconds = (isActive && lastTrackedAt != null)
-        ? now.difference(lastTrackedAt).inSeconds.clamp(0, 60)
+        ? now
+            .difference(lastTrackedAt)
+            .inSeconds
+            .clamp(0, maxInterpolatedSeconds)
         : 0;
     final estimatedViewingSeconds =
         metrics.viewingSecondsForCurrentInterval + extraSeconds;
