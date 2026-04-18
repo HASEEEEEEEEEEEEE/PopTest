@@ -87,7 +87,7 @@ class PopMonitoringManager {
       return;
     }
     final settings = _ref.read(effectivePopSettingsProvider(deckId));
-    if (settings.services.isEmpty) {
+    if (settings.services.isEmpty && settings.customUrls.isEmpty) {
       await _nativeBridge.stopMonitoring();
       return;
     }
@@ -100,7 +100,17 @@ class PopMonitoringManager {
       ),
     );
     if (started) return;
-    await _nativeBridge.openUsageAccessSettings();
+    final permissions = await _nativeBridge.getPermissionStatus();
+    final hasUsageAccess = permissions['usageAccess'] == true;
+    final requiresAccessibilityPermission = settings.customUrls.any(
+      (url) => url.trim().isNotEmpty,
+    );
+    final hasAccessibility = permissions['accessibilityEnabled'] == true;
+    if (!hasUsageAccess) {
+      await _nativeBridge.openUsageAccessSettings();
+    } else if (requiresAccessibilityPermission && !hasAccessibility) {
+      await _nativeBridge.openAccessibilitySettings();
+    }
     await _ref.read(popStudyActiveProvider.notifier).setActive(false);
   }
 

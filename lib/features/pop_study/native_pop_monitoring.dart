@@ -119,4 +119,53 @@ class NativePopMonitoringBridge {
       return;
     }
   }
+
+  Future<void> openAccessibilitySettings() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _methodChannel.invokeMethod<void>('openAccessibilitySettings');
+    } on MissingPluginException catch (error) {
+      debugPrint('Accessibility settings plugin missing: $error');
+      return;
+    } on PlatformException catch (error) {
+      debugPrint('Failed to open accessibility settings: $error');
+      return;
+    }
+  }
+
+  Future<Map<String, bool>> getPermissionStatus() async {
+    if (!Platform.isAndroid) {
+      return const {
+        'usageAccess': false,
+        'accessibilityEnabled': false,
+      };
+    }
+    try {
+      final raw = await _methodChannel.invokeMethod<Map<dynamic, dynamic>>(
+        'getMonitoringPermissionStatus',
+      );
+      if (raw == null) {
+        return const {
+          'usageAccess': false,
+          'accessibilityEnabled': false,
+        };
+      }
+      return {
+        'usageAccess': raw['usageAccess'] == true,
+        'accessibilityEnabled': raw['accessibilityEnabled'] == true,
+      };
+    } on MissingPluginException catch (error) {
+      debugPrint('Permission status plugin missing: $error');
+      return const {
+        'usageAccess': false,
+        'accessibilityEnabled': false,
+      };
+    } on PlatformException catch (error) {
+      debugPrint('Failed to get permission status: $error');
+      return const {
+        'usageAccess': false,
+        'accessibilityEnabled': false,
+      };
+    }
+  }
 }
