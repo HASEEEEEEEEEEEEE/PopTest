@@ -12,6 +12,7 @@ import '../features/review/review_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/stats/stats_screen.dart';
 import 'shell_scaffold.dart';
+import '../features/study/study_screen.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -40,6 +41,13 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.home,
                 builder: (context, state) => const HomeScreen(),
+              ),
+              GoRoute(
+                path: 'study',
+                builder: (context, state) {
+                  final deckId = state.pathParameters['deckId']!;
+                  return StudyScreen(deckId: deckId);
+                },
               ),
             ],
           ),
@@ -76,6 +84,13 @@ final routerProvider = Provider<GoRouter>((ref) {
                         builder: (context, state) {
                           final deckId = state.pathParameters['deckId']!;
                           return PopStudyScreen(deckId: deckId);
+                        },
+                      ),
+                      GoRoute(
+                        path: 'study',
+                        builder: (context, state) {
+                          final deckId = state.pathParameters['deckId']!;
+                          return StudyScreen(deckId: deckId);
                         },
                       ),
                     ],

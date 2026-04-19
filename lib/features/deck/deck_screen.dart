@@ -68,8 +68,7 @@ class DeckScreen extends ConsumerWidget {
             FilledButton.icon(
               icon: const Icon(Icons.play_arrow),
               label: const Text('学習開始'),
-              onPressed: () =>
-                  context.go('${AppRoutes.decks}/$deckId/pop'),
+              onPressed: () => context.go('${AppRoutes.decks}/$deckId/study'),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(

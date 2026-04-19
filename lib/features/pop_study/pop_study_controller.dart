@@ -6,6 +6,7 @@ import 'deck_pop_settings.dart';
 import 'pop_models.dart';
 import 'pop_repository.dart';
 import 'pop_settings.dart';
+import '../../core/scheduler/scheduler.dart';
 
 /// Snapshot of the pop-study session state.
 class PopStudyState {
@@ -65,39 +66,43 @@ class PopStudyController
     state = state.copyWith(showBack: true);
   }
 
-  /// "Again" – keep card in session (move to end of queue) and set learning.
-  void again() {
-    if (state.isDone) return;
-    final card = state.queue.first.copyWith(state: CardState.learning);
-    final newQueue = [...state.queue.skip(1), card];
-    final newCardMap = Map<String, CardModel>.of(state.cardMap)
-      ..[card.id] = card;
-    state =
-        state.copyWith(queue: newQueue, cardMap: newCardMap, showBack: false);
-    // Persist the updated card state.
-    ref
-        .read(deckRepositoryProvider.notifier)
-        .updateCardState(arg, card.id, card);
+  // pop_study_controller.dart の PopStudyController 内
+  void reset() {
+    final repo = ref.read(deckRepositoryProvider.notifier);
+    final newLimit = ref.read(newLimitProvider);
+    final popCount = ref.read(effectivePopSettingsProvider(arg)).popCount;
+    final deck = repo.getDeck(arg);
+    final queue = buildSessionQueue(
+      cards: deck.cards,
+      newLimit: newLimit,
+      sessionLimit: popCount,
+    );
+    final cardMap = {for (final c in deck.cards) c.id: c};
+    state = PopStudyState(queue: queue, cardMap: cardMap, showBack: false);
   }
 
-  /// "Good" – advance state and remove card from queue.
-  /// new → review, learning → review, review → review (refresh dueAt +1 day).
-  void good() {
+  void rate(ReviewRating rating) {
     if (state.isDone) return;
-    final card = state.queue.first.copyWith(
-      state: CardState.review,
-      dueAt: DateTime.now().add(const Duration(days: 1)),
-    );
+    final card = state.queue.first;
+    final updated = Sm2Scheduler.applyRating(card, rating);
+
+    // queueから取り除く（again/hardなら末尾に戻す）
     final newQueue = state.queue.skip(1).toList();
+    if (rating == ReviewRating.again || rating == ReviewRating.hard) {
+      newQueue.add(updated);
+    }
+
     final newCardMap = Map<String, CardModel>.of(state.cardMap)
-      ..[card.id] = card;
+      ..[updated.id] = updated;
     state =
         state.copyWith(queue: newQueue, cardMap: newCardMap, showBack: false);
-    // Persist the updated card state.
-    ref
-        .read(deckRepositoryProvider.notifier)
-        .updateCardState(arg, card.id, card);
+
+    ref.read(deckRepositoryProvider.notifier).updateCardFull(arg, updated);
   }
+
+// 互換性のため残す
+  void again() => rate(ReviewRating.again);
+  void good() => rate(ReviewRating.good);
 }
 
 final popStudyProvider = NotifierProvider.autoDispose

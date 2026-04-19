@@ -3,25 +3,24 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/services.dart';
 
 import 'pop_counts.dart';
 import 'pop_models.dart';
 import 'pop_study_controller.dart';
+import '../../core/scheduler/scheduler.dart';
 
-/// Pop Study screen – the core Anki-like study experience.
-///
-/// Shows both:
-///  • Session remaining counts (with current card state underlined).
-///  • Deck total counts (with current card state underlined).
-///
-/// Implements "solve-to-dismiss": back navigation shows a confirmation dialog
-/// unless the session is already complete.
-class PopStudyScreen extends ConsumerWidget {
+class PopStudyScreen extends ConsumerStatefulWidget {
   const PopStudyScreen({super.key, required this.deckId});
 
   final String deckId;
 
-  Future<void> _confirmExit(BuildContext context) async {
+  @override
+  ConsumerState<PopStudyScreen> createState() => _PopStudyScreenState();
+}
+
+class _PopStudyScreenState extends ConsumerState<PopStudyScreen> {
+  Future<void> _confirmExit() async {
     final shouldExit = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -39,20 +38,20 @@ class PopStudyScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (shouldExit == true && context.mounted) {
+    if (shouldExit == true && mounted) {
       context.pop();
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(popStudyProvider(deckId));
+  Widget build(BuildContext context) {
+    final state = ref.watch(popStudyProvider(widget.deckId));
 
     return PopScope(
       canPop: state.isDone,
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (didPop) return;
-        unawaited(_confirmExit(context));
+        unawaited(_confirmExit());
       },
       child: Scaffold(
         appBar: AppBar(
@@ -60,37 +59,51 @@ class PopStudyScreen extends ConsumerWidget {
           leading: BackButton(
             onPressed: state.isDone
                 ? () => context.pop()
-                : () => unawaited(_confirmExit(context)),
+                : () => unawaited(_confirmExit()),
           ),
         ),
-        body: state.isDone
-            ? _buildDoneView(context)
-            : _buildStudyView(context, ref, state),
+        body: state.isDone ? _buildDoneView() : _buildStudyView(state),
       ),
     );
   }
 
-  Widget _buildDoneView(BuildContext context) {
+  Widget _buildDoneView() {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.check_circle_outline, size: 64, color: Colors.green),
           const SizedBox(height: 16),
-          Text('セッション完了！',
-              style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: () => context.pop(),
-            child: const Text('デッキに戻る'),
+          Text('セッション完了！', style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          Text('お疲れさまでした', style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 32),
+          FilledButton.icon(
+            icon: const Icon(Icons.school),
+            label: const Text('このまま学習を続ける'),
+            onPressed: () => context.go('/decks/${widget.deckId}/study'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.layers_outlined),
+            label: const Text('デッキを確認する'),
+            onPressed: () => context.go('/decks/${widget.deckId}'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('元のアプリに戻る'),
+            onPressed: () async {
+              const channel = MethodChannel('poptest.pop_monitoring/methods');
+              await channel.invokeMethod('moveTaskToBack');
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStudyView(
-      BuildContext context, WidgetRef ref, PopStudyState state) {
+  Widget _buildStudyView(PopStudyState state) {
     final current = state.currentCard!;
     final sessionCounts = countAll(state.queue);
     final deckCounts = countAll(state.cardMap.values);
@@ -119,13 +132,14 @@ class PopStudyScreen extends ConsumerWidget {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.tonal(
-                      onPressed: () =>
-                          ref.read(popStudyProvider(deckId).notifier).reveal(),
+                      onPressed: () => ref
+                          .read(popStudyProvider(widget.deckId).notifier)
+                          .reveal(),
                       child: const Text('裏面を見る'),
                     ),
                   )
                 else
-                  _AnswerButtons(deckId: deckId),
+                  _AnswerButtons(deckId: widget.deckId),
               ],
             ),
           ),
@@ -153,8 +167,7 @@ class _CountsBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
-          Text('$label: ${counts.total}枚',
-              style: theme.textTheme.bodySmall),
+          Text('$label: ${counts.total}枚', style: theme.textTheme.bodySmall),
           const SizedBox(width: 8),
           const Text('| '),
           _CountChip(
@@ -189,12 +202,10 @@ class _CountChip extends StatelessWidget {
     return Text(
       label,
       style: theme.textTheme.bodySmall?.copyWith(
-        decoration:
-            highlight ? TextDecoration.underline : TextDecoration.none,
+        decoration: highlight ? TextDecoration.underline : TextDecoration.none,
         fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
-        color: highlight
-            ? theme.colorScheme.primary
-            : theme.colorScheme.onSurface,
+        color:
+            highlight ? theme.colorScheme.primary : theme.colorScheme.onSurface,
         decorationColor: highlight ? theme.colorScheme.primary : null,
         decorationThickness: highlight ? 2 : null,
       ),
@@ -247,28 +258,54 @@ class _AnswerButtons extends ConsumerWidget {
 
   final String deckId;
 
+  String _formatInterval(Duration d) {
+    if (d.inDays >= 1) return '${d.inDays}日';
+    if (d.inHours >= 1) return '${d.inHours}時間';
+    if (d.inMinutes >= 1) return '${d.inMinutes}分';
+    return '<1分';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(popStudyProvider(deckId).notifier);
+    final state = ref.watch(popStudyProvider(deckId));
+    final card = state.currentCard;
+    if (card == null) return const SizedBox.shrink();
+
+    final ratings = [
+      (ReviewRating.again, 'もう一度', Colors.red),
+      (ReviewRating.hard, '難しい', Colors.orange),
+      (ReviewRating.good, '普通', Colors.blue),
+      (ReviewRating.easy, '簡単', Colors.green),
+    ];
+
     return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: controller.again,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
+      children: ratings.map((r) {
+        final (rating, label, color) = r;
+        final preview = Sm2Scheduler.previewInterval(card, rating);
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: OutlinedButton(
+              onPressed: () => controller.rate(rating),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: color,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 2),
+                  Text(_formatInterval(preview),
+                      style: const TextStyle(fontSize: 11)),
+                ],
+              ),
             ),
-            child: const Text('もう一度'),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: FilledButton(
-            onPressed: controller.good,
-            child: const Text('覚えた'),
-          ),
-        ),
-      ],
+        );
+      }).toList(),
     );
   }
 }

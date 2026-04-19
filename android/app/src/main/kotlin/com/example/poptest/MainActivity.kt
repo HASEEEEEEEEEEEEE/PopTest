@@ -128,6 +128,13 @@ class MainActivity : FlutterActivity() {
                 )
             }
 
+
+            "moveTaskToBack" -> {
+                moveTaskToBack(true)
+                result.success(null)
+            }
+
+
             else -> result.notImplemented()
         }
     }

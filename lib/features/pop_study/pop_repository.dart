@@ -63,19 +63,15 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
   }
 
   /// Updates a single card's state both in memory and in [AppPrefs].
-  void updateCardState(
-      String deckId, String cardId, CardModel updatedCard) {
+  void updateCardState(String deckId, String cardId, CardModel updatedCard) {
     final deck = state[deckId];
     if (deck == null) return;
     final cards =
         deck.cards.map((c) => c.id == cardId ? updatedCard : c).toList();
     state = Map.of(state)
-      ..[deckId] = DeckData(
-          deckId: deck.deckId, name: deck.name, cards: cards);
+      ..[deckId] = DeckData(deckId: deck.deckId, name: deck.name, cards: cards);
     // Persist asynchronously (fire-and-forget; errors are non-fatal).
-    ref
-        .read(appPrefsProvider)
-        .setCardState(deckId, cardId, updatedCard.state);
+    ref.read(appPrefsProvider).setCardState(deckId, cardId, updatedCard.state);
   }
 
   Future<void> renameDeck(String deckId, String newName) async {
@@ -112,6 +108,15 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
       }
     }
     return maxNumber;
+  }
+
+  /// SM-2更新後のカード全体を保存する
+  Future<void> updateCardFull(String deckId, CardModel card) async {
+    final deck = state[deckId];
+    if (deck == null) return;
+    final cards = deck.cards.map((c) => c.id == card.id ? card : c).toList();
+    state = Map.of(state)..[deckId] = deck.copyWith(cards: cards);
+    await ref.read(appPrefsProvider).setDeckCards(deckId, cards);
   }
 
   Future<void> updateCard(
@@ -160,8 +165,8 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
   // ── Private helpers ────────────────────────────────────────────────────────
 
   DeckData _applyPersistedStates(DeckData deck, AppPrefs prefs) {
-    final saved = prefs.loadCardStates(
-        deck.deckId, deck.cards.map((c) => c.id));
+    final saved =
+        prefs.loadCardStates(deck.deckId, deck.cards.map((c) => c.id));
     if (saved.isEmpty) return deck;
     return DeckData(
       deckId: deck.deckId,
@@ -176,72 +181,54 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
   static Map<String, DeckData> _initialDecks(AppPrefs prefs) {
     final defaults = <String, DeckData>{
       '1': DeckData(
-          deckId: '1',
-          name: '日本語基礎',
-          cards: [
-            const CardModel(
-                id: '1-1',
-                front: 'apple',
-                back: 'りんご',
-                state: CardState.newCard),
-            const CardModel(
-                id: '1-2',
-                front: 'book',
-                back: '本',
-                state: CardState.newCard),
-            const CardModel(
-                id: '1-3',
-                front: 'cat',
-                back: '猫',
-                state: CardState.learning),
-            const CardModel(
-                id: '1-4',
-                front: 'dog',
-                back: '犬',
-                state: CardState.review),
-            const CardModel(
-                id: '1-5',
-                front: 'egg',
-                back: '卵',
-                state: CardState.review),
-            const CardModel(
-                id: '1-6',
-                front: 'fish',
-                back: '魚',
-                state: CardState.newCard),
-          ],
-        ),
+        deckId: '1',
+        name: '日本語基礎',
+        cards: [
+          const CardModel(
+              id: '1-1', front: 'apple', back: 'りんご', state: CardState.newCard),
+          const CardModel(
+              id: '1-2', front: 'book', back: '本', state: CardState.newCard),
+          const CardModel(
+              id: '1-3', front: 'cat', back: '猫', state: CardState.learning),
+          const CardModel(
+              id: '1-4', front: 'dog', back: '犬', state: CardState.review),
+          const CardModel(
+              id: '1-5', front: 'egg', back: '卵', state: CardState.review),
+          const CardModel(
+              id: '1-6', front: 'fish', back: '魚', state: CardState.newCard),
+        ],
+      ),
       '2': DeckData(
-          deckId: '2',
-          name: 'JLPT N5 単語',
-          cards: [
-            const CardModel(
-                id: '2-1',
-                front: '水',
-                back: 'water / みず',
-                state: CardState.newCard),
-            const CardModel(
-                id: '2-2',
-                front: '火',
-                back: 'fire / ひ',
-                state: CardState.learning),
-            const CardModel(
-                id: '2-3',
-                front: '山',
-                back: 'mountain / やま',
-                state: CardState.review),
-            const CardModel(
-                id: '2-4',
-                front: '川',
-                back: 'river / かわ',
-                state: CardState.newCard),
-            const CardModel(
-                id: '2-5',
-                front: '空',
-                back: 'sky / そら',
-                state: CardState.newCard),
-          ],
-        ),
+        deckId: '2',
+        name: 'JLPT N5 単語',
+        cards: [
+          const CardModel(
+              id: '2-1',
+              front: '水',
+              back: 'water / みず',
+              state: CardState.newCard),
+          const CardModel(
+              id: '2-2',
+              front: '火',
+              back: 'fire / ひ',
+              state: CardState.learning),
+          const CardModel(
+              id: '2-3',
+              front: '山',
+              back: 'mountain / やま',
+              state: CardState.review),
+          const CardModel(
+              id: '2-4',
+              front: '川',
+              back: 'river / かわ',
+              state: CardState.newCard),
+          const CardModel(
+              id: '2-5',
+              front: '空',
+              back: 'sky / そら',
+              state: CardState.newCard),
+        ],
+      ),
     };
     return {
       for (final entry in defaults.entries)

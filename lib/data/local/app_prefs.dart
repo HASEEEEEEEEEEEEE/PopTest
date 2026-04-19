@@ -223,6 +223,11 @@ class AppPrefs {
               'front': c.front,
               'back': c.back,
               'state': _serializeCardState(c.state),
+              'dueAt': c.dueAt?.toIso8601String(),
+              'intervalDays': c.intervalDays,
+              'easeFactor': c.easeFactor,
+              'repetitions': c.repetitions,
+              'lapses': c.lapses,
             }))
         .toList();
     await _prefs.setStringList('$_prefixDeckCards$deckId', rows);
@@ -247,18 +252,25 @@ class AppPrefs {
       final id = cardData['id'];
       final front = cardData['front'];
       final back = cardData['back'];
-      final state = cardData['state'];
+      final stateStr = cardData['state'];
       if (id is! String ||
           front is! String ||
           back is! String ||
-          state is! String) {
+          stateStr is! String) {
         continue;
       }
+      final dueAtRaw = cardData['dueAt'];
+      final dueAt = dueAtRaw is String ? DateTime.tryParse(dueAtRaw) : null;
       cards.add(CardModel(
         id: id,
         front: front,
         back: back,
-        state: _parseCardState(state),
+        state: _parseCardState(stateStr),
+        dueAt: dueAt,
+        intervalDays: (cardData['intervalDays'] as num?)?.toInt() ?? 0,
+        easeFactor: (cardData['easeFactor'] as num?)?.toDouble() ?? 2.5,
+        repetitions: (cardData['repetitions'] as num?)?.toInt() ?? 0,
+        lapses: (cardData['lapses'] as num?)?.toInt() ?? 0,
       ));
     }
     return cards;
