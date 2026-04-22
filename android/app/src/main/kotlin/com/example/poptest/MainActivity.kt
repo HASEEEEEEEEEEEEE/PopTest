@@ -1,13 +1,21 @@
 package com.example.poptest
 
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Base64
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 
 class MainActivity : FlutterActivity() {
     private var methodChannel: MethodChannel? = null
@@ -67,11 +75,11 @@ class MainActivity : FlutterActivity() {
         when (call.method) {
             "startMonitoring" -> {
                 val args = call.arguments as? Map<*, *>
-                val services = (args?.get("services") as? List<*>)
-                    ?.mapNotNull { item -> item as? String }
+                val packageNames = (args?.get("packageNames") as? List<*>)
+                    ?.mapNotNull { it as? String }
                     ?: emptyList()
                 val customUrls = (args?.get("customUrls") as? List<*>)
-                    ?.mapNotNull { item -> item as? String }
+                    ?.mapNotNull { it as? String }
                     ?: emptyList()
                 val intervalMinutes = (args?.get("intervalMinutes") as? Number)?.toInt() ?: 30
                 val popCount = (args?.get("popCount") as? Number)?.toInt() ?: 1
@@ -80,7 +88,9 @@ class MainActivity : FlutterActivity() {
                     result.success(false)
                     return
                 }
-                UsageMonitorService.start(this, services, customUrls, intervalMinutes, popCount, deckId)
+                UsageMonitorService.start(
+                    this, packageNames, customUrls, intervalMinutes, popCount, deckId,
+                )
                 result.success(true)
             }
 
@@ -128,15 +138,59 @@ class MainActivity : FlutterActivity() {
                 )
             }
 
-
             "moveTaskToBack" -> {
                 moveTaskToBack(true)
                 result.success(null)
             }
 
+            "getInstalledApps" -> {
+                try {
+                    val pm = packageManager
+                    val appList = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                    val resultList = appList.mapNotNull { appInfo ->
+                        // Only include apps that have a launcher entry (user-visible apps).
+                        val hasLauncher =
+                            pm.getLaunchIntentForPackage(appInfo.packageName) != null
+                        if (!hasLauncher) return@mapNotNull null
+                        val label = pm.getApplicationLabel(appInfo).toString()
+                        val iconBase64 = try {
+                            val drawable = pm.getApplicationIcon(appInfo.packageName)
+                            val bmp = drawableToBitmap(drawable)
+                            val baos = ByteArrayOutputStream()
+                            bmp.compress(Bitmap.CompressFormat.PNG, 85, baos)
+                            bmp.recycle()
+                            Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+                        } catch (_: Exception) {
+                            null
+                        }
+                        mapOf(
+                            "packageName" to appInfo.packageName,
+                            "label" to label,
+                            "icon" to iconBase64,
+                        )
+                    }.sortedBy { it["label"] as String }
+                    result.success(resultList)
+                } catch (e: Exception) {
+                    result.error("GET_APPS_ERROR", e.message, null)
+                }
+            }
 
             else -> result.notImplemented()
         }
+    }
+
+    private fun drawableToBitmap(drawable: Drawable): Bitmap {
+        val size = 96
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        if (drawable is BitmapDrawable && drawable.bitmap != null) {
+            canvas.drawBitmap(drawable.bitmap, null,
+                android.graphics.Rect(0, 0, size, size), null)
+        } else {
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(canvas)
+        }
+        return bitmap
     }
 
     private fun openUsageAccessSettings() {
@@ -154,8 +208,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun hasRequiredPermissions(): Boolean {
-        val usageGranted = UsageMonitorService.isUsageAccessGranted(this)
-        if (!usageGranted) return false
+        if (!UsageMonitorService.isUsageAccessGranted(this)) return false
         if (!AccessibilityMonitorService.isAccessibilityEnabled(this)) return false
         return Settings.canDrawOverlays(this)
     }

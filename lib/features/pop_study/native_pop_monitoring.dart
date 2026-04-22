@@ -1,30 +1,59 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'pop_models.dart';
 
+/// An installed app returned from the native side.
+class InstalledApp {
+  const InstalledApp({
+    required this.packageName,
+    required this.label,
+    this.iconBytes,
+  });
+
+  final String packageName;
+  final String label;
+  final Uint8List? iconBytes;
+}
+
+/// Riverpod provider that fetches installed apps once and caches the result.
+final installedAppsProvider = FutureProvider<List<InstalledApp>>((ref) async {
+  return NativePopMonitoringBridge.getInstalledApps();
+});
+
 class NativePopMonitoringConfig {
   const NativePopMonitoringConfig({
-    required this.services,
+    required this.packageNames,
     required this.customUrls,
     required this.intervalMinutes,
     required this.popCount,
     required this.deckId,
   });
 
-  final Set<PopService> services;
+  final Set<String> packageNames;
   final Set<String> customUrls;
   final int intervalMinutes;
   final int popCount;
   final String deckId;
 
+  /// Effective URLs include [customUrls] plus those derived from known packages.
+  Set<String> get _effectiveUrls {
+    final urls = Set<String>.of(customUrls);
+    for (final pkg in packageNames) {
+      urls.addAll(knownPackageUrlPatterns[pkg] ?? const {});
+    }
+    return urls;
+  }
+
   Map<String, dynamic> toMap() {
     return {
-      'services': services.map((service) => service.name).toList(),
-      'customUrls': customUrls.toList(),
+      'packageNames': packageNames.toList(),
+      'customUrls': _effectiveUrls.toList(),
       'intervalMinutes': intervalMinutes,
       'popCount': popCount,
       'deckId': deckId,
@@ -54,12 +83,10 @@ class NativePopMonitoringEvent {
   static NativePopMonitoringEvent? fromRaw(dynamic raw) {
     if (raw is! Map) return null;
     final matchedTarget = raw['matchedTarget'] == true;
-    final packageNameRaw = raw['packageName'];
-    final packageName = packageNameRaw is String ? packageNameRaw : null;
-    final urlRaw = raw['url'];
-    final url = urlRaw is String ? urlRaw : null;
-    final deckIdRaw = raw['deckId'];
-    final deckId = deckIdRaw is String ? deckIdRaw : null;
+    final packageName =
+        raw['packageName'] is String ? raw['packageName'] as String : null;
+    final url = raw['url'] is String ? raw['url'] as String : null;
+    final deckId = raw['deckId'] is String ? raw['deckId'] as String : null;
     final timestampRaw = raw['timestampMs'];
     if (timestampRaw is! int) return null;
     final eventTypeRaw = raw['eventType'] as String? ?? 'tracking';
@@ -82,8 +109,40 @@ class NativePopMonitoringEvent {
 }
 
 class NativePopMonitoringBridge {
-  static const _methodChannel = MethodChannel('poptest.pop_monitoring/methods');
-  static const _eventChannel = EventChannel('poptest.pop_monitoring/events');
+  static const _methodChannel =
+      MethodChannel('poptest.pop_monitoring/methods');
+  static const _eventChannel =
+      EventChannel('poptest.pop_monitoring/events');
+
+  /// Returns the list of user-launchable installed apps with their icons.
+  static Future<List<InstalledApp>> getInstalledApps() async {
+    if (!Platform.isAndroid) return const [];
+    try {
+      final raw = await _methodChannel
+          .invokeMethod<List<dynamic>>('getInstalledApps');
+      if (raw == null) return const [];
+      return raw.whereType<Map>().map((m) {
+        final iconRaw = m['icon'] as String?;
+        Uint8List? iconBytes;
+        if (iconRaw != null) {
+          try {
+            iconBytes = base64Decode(iconRaw);
+          } catch (_) {}
+        }
+        return InstalledApp(
+          packageName: (m['packageName'] as String?) ?? '',
+          label: (m['label'] as String?) ?? '',
+          iconBytes: iconBytes,
+        );
+      }).where((a) => a.packageName.isNotEmpty).toList();
+    } on MissingPluginException catch (e) {
+      debugPrint('getInstalledApps plugin missing: $e');
+      return const [];
+    } on PlatformException catch (e) {
+      debugPrint('getInstalledApps failed: $e');
+      return const [];
+    }
+  }
 
   Stream<NativePopMonitoringEvent> eventStream() async* {
     if (!Platform.isAndroid) return;
@@ -125,10 +184,8 @@ class NativePopMonitoringBridge {
       await _methodChannel.invokeMethod<void>('stopMonitoring');
     } on MissingPluginException catch (error) {
       debugPrint('Native pop monitoring stop plugin missing: $error');
-      return;
     } on PlatformException catch (error) {
       debugPrint('Native pop monitoring stop failed: $error');
-      return;
     }
   }
 
@@ -136,12 +193,10 @@ class NativePopMonitoringBridge {
     if (!Platform.isAndroid) return;
     try {
       await _methodChannel.invokeMethod<void>('openUsageAccessSettings');
-    } on MissingPluginException catch (error) {
-      debugPrint('Usage access settings plugin missing: $error');
-      return;
-    } on PlatformException catch (error) {
-      debugPrint('Failed to open usage access settings: $error');
-      return;
+    } on MissingPluginException catch (e) {
+      debugPrint('Usage access settings plugin missing: $e');
+    } on PlatformException catch (e) {
+      debugPrint('Failed to open usage access settings: $e');
     }
   }
 
@@ -149,12 +204,10 @@ class NativePopMonitoringBridge {
     if (!Platform.isAndroid) return;
     try {
       await _methodChannel.invokeMethod<void>('openAccessibilitySettings');
-    } on MissingPluginException catch (error) {
-      debugPrint('Accessibility settings plugin missing: $error');
-      return;
-    } on PlatformException catch (error) {
-      debugPrint('Failed to open accessibility settings: $error');
-      return;
+    } on MissingPluginException catch (e) {
+      debugPrint('Accessibility settings plugin missing: $e');
+    } on PlatformException catch (e) {
+      debugPrint('Failed to open accessibility settings: $e');
     }
   }
 
@@ -173,11 +226,11 @@ class NativePopMonitoringBridge {
         'usageAccess': raw['usageAccess'] == true,
         'accessibilityEnabled': raw['accessibilityEnabled'] == true,
       };
-    } on MissingPluginException catch (error) {
-      debugPrint('Permission status plugin missing: $error');
+    } on MissingPluginException catch (e) {
+      debugPrint('Permission status plugin missing: $e');
       return const {'usageAccess': false, 'accessibilityEnabled': false};
-    } on PlatformException catch (error) {
-      debugPrint('Failed to get permission status: $error');
+    } on PlatformException catch (e) {
+      debugPrint('Failed to get permission status: $e');
       return const {'usageAccess': false, 'accessibilityEnabled': false};
     }
   }

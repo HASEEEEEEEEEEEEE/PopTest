@@ -23,14 +23,18 @@ class DeckPopSettingsNotifier
     await _persist(state.copyWith(useGlobal: value));
   }
 
-  Future<void> toggleService(PopService service) async {
-    final updated = Set<PopService>.of(state.services);
-    if (updated.contains(service)) {
-      updated.remove(service);
-    } else {
-      updated.add(service);
-    }
-    await _persist(state.copyWith(services: updated));
+  Future<void> setPackageNames(Set<String> packageNames) async {
+    await _persist(state.copyWith(packageNames: packageNames));
+  }
+
+  Future<void> addPackage(String packageName) async {
+    final updated = Set<String>.of(state.packageNames)..add(packageName);
+    await _persist(state.copyWith(packageNames: updated));
+  }
+
+  Future<void> removePackage(String packageName) async {
+    final updated = Set<String>.of(state.packageNames)..remove(packageName);
+    await _persist(state.copyWith(packageNames: updated));
   }
 
   Future<void> setCustomUrls(Set<String> customUrls) async {
@@ -41,12 +45,12 @@ class DeckPopSettingsNotifier
     final url = rawUrl.trim();
     if (url.isEmpty) return;
     final updated = Set<String>.of(state.customUrls)..add(url);
-    await setCustomUrls(updated);
+    await _persist(state.copyWith(customUrls: updated));
   }
 
   Future<void> removeCustomUrl(String url) async {
     final updated = Set<String>.of(state.customUrls)..remove(url);
-    await setCustomUrls(updated);
+    await _persist(state.copyWith(customUrls: updated));
   }
 
   Future<void> setIntervalMinutes(int minutes) async {

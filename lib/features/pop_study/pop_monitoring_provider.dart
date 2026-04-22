@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'pop_study_controller.dart';
 import '../../routing/router.dart';
@@ -82,13 +81,13 @@ class PopMonitoringManager {
       return;
     }
     final settings = _ref.read(effectivePopSettingsProvider(deckId));
-    if (settings.services.isEmpty && settings.customUrls.isEmpty) {
+    if (settings.packageNames.isEmpty && settings.customUrls.isEmpty) {
       await _nativeBridge.stopMonitoring();
       return;
     }
     final started = await _nativeBridge.startMonitoring(
       NativePopMonitoringConfig(
-        services: settings.services,
+        packageNames: settings.packageNames,
         customUrls: settings.customUrls,
         intervalMinutes: settings.intervalMinutes,
         popCount: settings.popCount,

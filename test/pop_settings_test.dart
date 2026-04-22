@@ -9,16 +9,19 @@ void main() {
   group('PopSettings', () {
     test('defaults have correct values', () {
       final s = PopSettings.defaults();
-      expect(s.services, isEmpty);
+      expect(s.packageNames, isEmpty);
       expect(s.customUrls, isEmpty);
       expect(s.intervalMinutes, PopSettings.defaultIntervalMinutes);
       expect(s.popCount, PopSettings.defaultPopCount);
     });
 
     test('copyWith overrides individual fields', () {
-      final s = PopSettings.defaults()
-          .copyWith(services: {PopService.twitter}, intervalMinutes: 15, popCount: 5);
-      expect(s.services, {PopService.twitter});
+      final s = PopSettings.defaults().copyWith(
+        packageNames: {'com.twitter.android'},
+        intervalMinutes: 15,
+        popCount: 5,
+      );
+      expect(s.packageNames, {'com.twitter.android'});
       expect(s.customUrls, isEmpty);
       expect(s.intervalMinutes, 15);
       expect(s.popCount, 5);
@@ -41,12 +44,22 @@ void main() {
     });
 
     test('copyWith preserves unchanged fields', () {
-      final original = PopSettings.defaults()
-          .copyWith(services: {PopService.youtube}, intervalMinutes: 45);
+      final original = PopSettings.defaults().copyWith(
+        packageNames: {'com.google.android.youtube'},
+        intervalMinutes: 45,
+      );
       final updated = original.copyWith(popCount: 7);
-      expect(updated.services, {PopService.youtube});
+      expect(updated.packageNames, {'com.google.android.youtube'});
       expect(updated.intervalMinutes, 45);
       expect(updated.popCount, 7);
+    });
+
+    test('effectiveUrls includes derived URL patterns for known packages', () {
+      final s = PopSettings.defaults().copyWith(
+        packageNames: {'com.twitter.android'},
+        customUrls: {'example.com'},
+      );
+      expect(s.effectiveUrls, containsAll(['twitter.com', 'x.com', 'example.com']));
     });
   });
 
@@ -54,7 +67,7 @@ void main() {
     test('defaults use global settings', () {
       final s = DeckPopSettings.defaults();
       expect(s.useGlobal, isTrue);
-      expect(s.services, isEmpty);
+      expect(s.packageNames, isEmpty);
       expect(s.customUrls, isEmpty);
       expect(s.intervalMinutes, PopSettings.defaultIntervalMinutes);
       expect(s.popCount, PopSettings.defaultPopCount);
@@ -62,18 +75,18 @@ void main() {
 
     test('resolve returns global when useGlobal is true', () {
       final global = PopSettings.defaults().copyWith(
-        services: {PopService.instagram},
+        packageNames: {'com.instagram.android'},
         intervalMinutes: 12,
         popCount: 5,
       );
       final deck = DeckPopSettings.defaults().copyWith(
         useGlobal: true,
-        services: {PopService.twitter},
+        packageNames: {'com.twitter.android'},
         intervalMinutes: 99,
         popCount: 9,
       );
       final resolved = deck.resolve(global);
-      expect(resolved.services, global.services);
+      expect(resolved.packageNames, global.packageNames);
       expect(resolved.customUrls, global.customUrls);
       expect(resolved.intervalMinutes, global.intervalMinutes);
       expect(resolved.popCount, global.popCount);
@@ -83,12 +96,12 @@ void main() {
       final global = PopSettings.defaults();
       final deck = DeckPopSettings.defaults().copyWith(
         useGlobal: false,
-        services: {PopService.youtube},
+        packageNames: {'com.google.android.youtube'},
         intervalMinutes: 25,
         popCount: 6,
       );
       final resolved = deck.resolve(global);
-      expect(resolved.services, {PopService.youtube});
+      expect(resolved.packageNames, {'com.google.android.youtube'});
       expect(resolved.customUrls, isEmpty);
       expect(resolved.intervalMinutes, 25);
       expect(resolved.popCount, 6);
@@ -106,24 +119,24 @@ void main() {
 
     test('loadPopSettings returns defaults when nothing is stored', () {
       final s = prefs.loadPopSettings();
-      expect(s.services, isEmpty);
+      expect(s.packageNames, isEmpty);
       expect(s.customUrls, isEmpty);
       expect(s.intervalMinutes, PopSettings.defaultIntervalMinutes);
       expect(s.popCount, PopSettings.defaultPopCount);
     });
 
-    test('setPopServices / loadPopSettings round-trips all services', () async {
-      final all = PopService.values.toSet();
-      await prefs.setPopServices(all);
+    test('setPopPackageNames / loadPopSettings round-trip', () async {
+      const pkgs = {'com.google.android.youtube', 'com.twitter.android'};
+      await prefs.setPopPackageNames(pkgs);
       final s = prefs.loadPopSettings();
-      expect(s.services, all);
+      expect(s.packageNames, pkgs);
     });
 
-    test('setPopServices with empty set removes the stored value', () async {
-      await prefs.setPopServices({PopService.twitter});
-      await prefs.setPopServices({});
+    test('setPopPackageNames with empty set removes the stored value', () async {
+      await prefs.setPopPackageNames({'com.twitter.android'});
+      await prefs.setPopPackageNames({});
       final s = prefs.loadPopSettings();
-      expect(s.services, isEmpty);
+      expect(s.packageNames, isEmpty);
     });
 
     test('setPopIntervalMinutes / loadPopSettings round-trip', () async {
@@ -143,7 +156,6 @@ void main() {
     });
 
     test('persisted out-of-range values are clamped on load', () async {
-      // Write invalid raw values directly to simulate future data migration.
       SharedPreferences.setMockInitialValues({
         'pop_interval_minutes': 0,
         'pop_count': 99,
@@ -155,33 +167,36 @@ void main() {
       expect(s.popCount, PopSettings.maxPopCount);
     });
 
-    test('unknown service name in stored string is silently dropped', () async {
+    test('legacy pop_services key is migrated to packageNames on first load',
+        () async {
       SharedPreferences.setMockInitialValues({
-        'pop_services': 'twitter,unknown_future_service,instagram',
+        'pop_services': 'twitter,instagram',
       });
       final sp2 = await SharedPreferences.getInstance();
       final prefs2 = AppPrefs(sp2);
       final s = prefs2.loadPopSettings();
-      expect(s.services, {PopService.twitter, PopService.instagram});
+      expect(s.packageNames, contains('com.twitter.android'));
+      expect(s.packageNames, contains('com.instagram.android'));
     });
 
-    test('partial service subset is persisted and restored correctly',
+    test('partial package subset is persisted and restored correctly',
         () async {
-      await prefs.setPopServices({PopService.youtube, PopService.tiktok});
+      const pkgs = {'com.google.android.youtube', 'com.zhiliaoapp.musically'};
+      await prefs.setPopPackageNames(pkgs);
       final s = prefs.loadPopSettings();
-      expect(s.services, {PopService.youtube, PopService.tiktok});
-      expect(s.services.contains(PopService.twitter), isFalse);
+      expect(s.packageNames, pkgs);
+      expect(s.packageNames.contains('com.twitter.android'), isFalse);
     });
   });
 
   group('buildSessionQueue – sessionLimit', () {
     const testNewLimit = 10;
 
-    final newCard = (String id) =>
+    CardModel newCard(String id) =>
         CardModel(id: id, front: '', back: '', state: CardState.newCard);
-    final learningCard = (String id) =>
+    CardModel learningCard(String id) =>
         CardModel(id: id, front: '', back: '', state: CardState.learning);
-    final reviewCard = (String id) =>
+    CardModel reviewCard(String id) =>
         CardModel(id: id, front: '', back: '', state: CardState.review);
 
     test('sessionLimit caps total queue length', () {
@@ -191,8 +206,8 @@ void main() {
         newCard('n1'),
         newCard('n2'),
       ];
-      final queue = buildSessionQueue(
-          cards: cards, newLimit: testNewLimit, sessionLimit: 2);
+      final queue =
+          buildSessionQueue(cards: cards, newLimit: testNewLimit, sessionLimit: 2);
       expect(queue.length, 2);
     });
 
@@ -209,8 +224,8 @@ void main() {
 
     test('sessionLimit larger than available cards does not pad', () {
       final cards = [newCard('n1'), newCard('n2')];
-      final queue = buildSessionQueue(
-          cards: cards, newLimit: testNewLimit, sessionLimit: 50);
+      final queue =
+          buildSessionQueue(cards: cards, newLimit: testNewLimit, sessionLimit: 50);
       expect(queue.length, 2);
     });
 
@@ -221,8 +236,8 @@ void main() {
         reviewCard('r1'),
         learningCard('l1'),
       ];
-      final queue = buildSessionQueue(
-          cards: cards, newLimit: testNewLimit, sessionLimit: 2);
+      final queue =
+          buildSessionQueue(cards: cards, newLimit: testNewLimit, sessionLimit: 2);
       expect(queue[0].state, CardState.learning);
       expect(queue[1].state, CardState.review);
     });

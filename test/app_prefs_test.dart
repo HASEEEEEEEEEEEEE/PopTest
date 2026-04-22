@@ -33,14 +33,14 @@ void main() {
 
     // ── card state ──────────────────────────────────────────────────────────
 
-    test('getCardState returns null when nothing is stored', () {
-      expect(prefs.getCardState('d1', 'c1'), isNull);
+    test('loadCardStates returns empty when nothing is stored', () {
+      expect(prefs.loadCardStates('d1', ['c1']), isEmpty);
     });
 
-    test('setCardState / getCardState round-trips all states', () async {
+    test('setCardState / loadCardStates round-trips all states', () async {
       for (final state in CardState.values) {
         await prefs.setCardState('d1', 'c1', state);
-        expect(prefs.getCardState('d1', 'c1'), state);
+        expect(prefs.loadCardStates('d1', ['c1'])['c1'], state);
       }
     });
 
@@ -59,8 +59,8 @@ void main() {
       await prefs.setCardState('d1', 'c1', CardState.learning);
       await prefs.setCardState('d2', 'c1', CardState.review);
 
-      expect(prefs.getCardState('d1', 'c1'), CardState.learning);
-      expect(prefs.getCardState('d2', 'c1'), CardState.review);
+      expect(prefs.loadCardStates('d1', ['c1'])['c1'], CardState.learning);
+      expect(prefs.loadCardStates('d2', ['c1'])['c1'], CardState.review);
     });
 
     test('unknown stored value falls back to newCard', () async {
@@ -69,7 +69,7 @@ void main() {
           {'card_state_d1_c1': 'unknown_future_value'});
       final sp2 = await SharedPreferences.getInstance();
       final prefs2 = AppPrefs(sp2);
-      expect(prefs2.getCardState('d1', 'c1'), CardState.newCard);
+      expect(prefs2.loadCardStates('d1', ['c1'])['c1'], CardState.newCard);
     });
 
     // ── popStudyActive ──────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ void main() {
       const deckId = 'd1';
       final settings = DeckPopSettings(
         useGlobal: false,
-        services: {PopService.twitter, PopService.youtube},
+        packageNames: {'com.twitter.android', 'com.google.android.youtube'},
         customUrls: {'youtube.com/shorts'},
         intervalMinutes: 9,
         popCount: 4,
@@ -101,7 +101,8 @@ void main() {
       await prefs.setDeckPopSettings(deckId, settings);
       final loaded = prefs.loadDeckPopSettings(deckId);
       expect(loaded.useGlobal, isFalse);
-      expect(loaded.services, {PopService.twitter, PopService.youtube});
+      expect(loaded.packageNames,
+          {'com.twitter.android', 'com.google.android.youtube'});
       expect(loaded.customUrls, {'youtube.com/shorts'});
       expect(loaded.intervalMinutes, 9);
       expect(loaded.popCount, 4);

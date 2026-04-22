@@ -1,45 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../pop_study/pop_models.dart';
 import '../pop_study/pop_metrics.dart';
-import '../pop_study/pop_metrics_model.dart';
 import '../pop_study/deck_pop_settings.dart';
 import '../pop_study/pop_repository.dart';
 import '../pop_study/pop_settings.dart';
 import '../pop_study/pop_study_active_provider.dart';
 import 'selected_deck_provider.dart';
 
-final nowTickerProvider = StreamProvider.autoDispose<DateTime>((ref) async* {
-  yield DateTime.now();
-  yield* Stream<DateTime>.periodic(
-    const Duration(seconds: 1),
-    (_) => DateTime.now(),
-  );
-});
-
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
-  // Matches native polling upper bound (30s) to avoid overstating stale gaps.
-  static const int _maxTrackingGapSeconds = 30;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final decks = ref.watch(deckRepositoryProvider).values.toList();
     final selectedDeckId = ref.watch(selectedDeckProvider);
-    final globalPopSettings = ref.watch(popSettingsProvider);
     final isActive = ref.watch(popStudyActiveProvider);
     final metrics = ref.watch(popMetricsProvider);
     final selectedDeckIdOrEmpty = selectedDeckId ?? '';
     final hasSelectedDeck = selectedDeckId != null;
-    final selectedDeckSettings = !hasSelectedDeck
-        ? null
-        : ref.watch(deckPopSettingsProvider(selectedDeckIdOrEmpty));
-    final useGlobalSettings =
-        !hasSelectedDeck || (selectedDeckSettings?.useGlobal ?? true);
     final effectivePopSettings = !hasSelectedDeck
-        ? globalPopSettings
+        ? ref.watch(popSettingsProvider)
         : ref.watch(effectivePopSettingsProvider(selectedDeckIdOrEmpty));
 
     final selectedDeck = decks.firstWhere(
@@ -50,7 +32,7 @@ class HomeScreen extends ConsumerWidget {
         ? selectedDeck.name
         : null;
 
-    final hasTargets = effectivePopSettings.services.isNotEmpty ||
+    final hasTargets = effectivePopSettings.packageNames.isNotEmpty ||
         effectivePopSettings.customUrls.isNotEmpty;
     final canStart = selectedDeckId != null && hasTargets;
 
@@ -60,9 +42,7 @@ class HomeScreen extends ConsumerWidget {
             .clamp(0, intervalSeconds);
     final countdownLabel = metrics.sessionStartedAt == null
         ? '--:--'
-        : formatDurationAsMinutesSeconds(
-            Duration(seconds: remainingSeconds),
-          );
+        : formatDurationAsMinutesSeconds(Duration(seconds: remainingSeconds));
     final watchedLabel = formatDurationAsMinutesSeconds(
       Duration(seconds: metrics.matchedActiveSeconds),
     );
@@ -84,46 +64,11 @@ class HomeScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('今日の学習', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 12),
-                  _MetricCard(
-                    label: 'ポップ表示回数',
-                    value: '${metrics.popupShownCount}',
-                    icon: Icons.menu_book_outlined,
-                    color: colorScheme.primaryContainer,
+                  // ── ポップ学習 ──────────────────────────────
+                  Text(
+                    'ポップ学習',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  _MetricCard(
-                    label: '開始回数',
-                    value: '${metrics.popupStartCount}',
-                    icon: Icons.check_circle_outline,
-                    color: colorScheme.secondaryContainer,
-                  ),
-                  _MetricCard(
-                    label: 'スキップ回数',
-                    value: '${metrics.popupSnoozeCount}',
-                    icon: Icons.notifications_outlined,
-                    color: colorScheme.tertiaryContainer,
-                  ),
-                  _MetricCard(
-                    label: '追跡イベント数',
-                    value: '${metrics.trackedEventCount}',
-                    icon: Icons.track_changes_outlined,
-                    color: colorScheme.surfaceContainerHighest,
-                  ),
-                  _MetricCard(
-                    label: '一致イベント数',
-                    value: '${metrics.matchedEventCount}',
-                    icon: Icons.link_outlined,
-                    color: colorScheme.surfaceContainer,
-                  ),
-                  _MetricCard(
-                    label: '対象サービス視聴時間',
-                    value: watchedLabel,
-                    icon: Icons.timer_outlined,
-                    color: colorScheme.surfaceContainerLow,
-                  ),
-                  const SizedBox(height: 24),
-                  Text('ポップ学習', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
                   Card(
                     child: Padding(
@@ -149,93 +94,24 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  if (!hasTargets && !isActive)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, bottom: 4),
+                      child: Row(
                         children: [
-                          const Text('対象サービス'),
+                          Icon(Icons.info_outline,
+                              size: 14, color: colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 6),
                           Text(
-                            '問題を表示するSNSを選択（複数可）',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            children: PopService.values
-                                .map(
-                                  (service) => FilterChip(
-                                    label: Text(service.label),
-                                    selected: effectivePopSettings.services
-                                        .contains(service),
-                                    onSelected: !hasSelectedDeck
-                                        ? (_) => ref
-                                            .read(popSettingsProvider.notifier)
-                                            .toggleService(service)
-                                        : useGlobalSettings
-                                            ? (_) => ref
-                                                .read(popSettingsProvider
-                                                    .notifier)
-                                                .toggleService(service)
-                                            : (_) => ref
-                                                .read(deckPopSettingsProvider(
-                                                        selectedDeckIdOrEmpty)
-                                                    .notifier)
-                                                .toggleService(service),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                          const SizedBox(height: 8),
-                          _CustomUrlSection(
-                            urls: effectivePopSettings.customUrls,
-                            onAdd: (url) {
-                              if (!hasSelectedDeck || useGlobalSettings) {
-                                ref
-                                    .read(popSettingsProvider.notifier)
-                                    .addCustomUrl(url);
-                                return;
-                              }
-                              ref
-                                  .read(deckPopSettingsProvider(
-                                          selectedDeckIdOrEmpty)
-                                      .notifier)
-                                  .addCustomUrl(url);
-                            },
-                            onRemove: (url) {
-                              if (!hasSelectedDeck || useGlobalSettings) {
-                                ref
-                                    .read(popSettingsProvider.notifier)
-                                    .removeCustomUrl(url);
-                                return;
-                              }
-                              ref
-                                  .read(deckPopSettingsProvider(
-                                          selectedDeckIdOrEmpty)
-                                      .notifier)
-                                  .removeCustomUrl(url);
-                            },
-                          ),
-                          if (!hasTargets)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Text(
-                                'サービス/URL未指定：ポップ学習を開始できません',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: colorScheme.error,
+                            '監視タブでアプリ・URLを設定してください',
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
                                     ),
-                              ),
-                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ),
                   const SizedBox(height: 8),
                   Card(
                     color: isActive
@@ -255,7 +131,7 @@ class HomeScreen extends ConsumerWidget {
                             ? '学習中 — SNS視聴中に問題が表示されます'
                             : canStart
                                 ? 'タップして開始'
-                                : 'デッキとサービスを選択してください',
+                                : 'デッキと監視対象を設定してください',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: isActive
                                   ? colorScheme.onPrimaryContainer
@@ -270,6 +146,38 @@ class HomeScreen extends ConsumerWidget {
                               .setActive(v)
                           : null,
                     ),
+                  ),
+
+                  // ── 今日の学習 ──────────────────────────────
+                  const SizedBox(height: 24),
+                  Text(
+                    '今日の学習',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  _MetricCard(
+                    label: 'ポップ表示回数',
+                    value: '${metrics.popupShownCount}',
+                    icon: Icons.menu_book_outlined,
+                    color: colorScheme.primaryContainer,
+                  ),
+                  _MetricCard(
+                    label: '学習開始回数',
+                    value: '${metrics.popupStartCount}',
+                    icon: Icons.check_circle_outline,
+                    color: colorScheme.secondaryContainer,
+                  ),
+                  _MetricCard(
+                    label: 'スキップ回数',
+                    value: '${metrics.popupSnoozeCount}',
+                    icon: Icons.notifications_outlined,
+                    color: colorScheme.tertiaryContainer,
+                  ),
+                  _MetricCard(
+                    label: '視聴時間',
+                    value: watchedLabel,
+                    icon: Icons.timer_outlined,
+                    color: colorScheme.surfaceContainerLow,
                   ),
                 ],
               ),
@@ -318,79 +226,6 @@ class _PopStudyStatusBar extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _CustomUrlSection extends StatefulWidget {
-  const _CustomUrlSection({
-    required this.urls,
-    required this.onAdd,
-    required this.onRemove,
-  });
-
-  final Set<String> urls;
-  final ValueChanged<String> onAdd;
-  final ValueChanged<String> onRemove;
-
-  @override
-  State<_CustomUrlSection> createState() => _CustomUrlSectionState();
-}
-
-class _CustomUrlSectionState extends State<_CustomUrlSection> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('対象URL（前方一致）'),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  hintText: '例: youtube.com/shorts',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.tonal(
-              onPressed: () {
-                final value = _controller.text.trim();
-                if (value.isEmpty) return;
-                widget.onAdd(value);
-                _controller.clear();
-              },
-              child: const Text('追加'),
-            ),
-          ],
-        ),
-        if (widget.urls.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: widget.urls
-                .map((url) => InputChip(
-                      label: Text(url),
-                      onDeleted: () => widget.onRemove(url),
-                    ))
-                .toList(),
-          ),
-        ],
-      ],
     );
   }
 }

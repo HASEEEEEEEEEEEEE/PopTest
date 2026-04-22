@@ -7,8 +7,8 @@ import '../features/deck/decks_screen.dart';
 import '../features/deck/deck_edit_screen.dart';
 import '../features/deck/deck_pop_settings_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/monitoring/monitoring_screen.dart';
 import '../features/pop_study/pop_study_screen.dart';
-import '../features/review/review_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/stats/stats_screen.dart';
 import 'shell_scaffold.dart';
@@ -19,8 +19,8 @@ final rootNavigatorKey = GlobalKey<NavigatorState>();
 /// Named route paths used throughout the app.
 abstract final class AppRoutes {
   static const home = '/';
+  static const monitoring = '/monitoring';
   static const decks = '/decks';
-  static const review = '/review';
   static const settings = '/settings';
   static const stats = '/stats';
 }
@@ -51,7 +51,16 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // Branch 1 – Decks (list → detail → pop study)
+          // Branch 1 – Monitoring
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.monitoring,
+                builder: (context, state) => const MonitoringScreen(),
+              ),
+            ],
+          ),
+          // Branch 2 – Decks (list → detail → pop study)
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -99,30 +108,21 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // Branch 2 – Review
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: AppRoutes.review,
-                builder: (context, state) => const ReviewScreen(),
-              ),
-            ],
-          ),
-          // Branch 3 – Settings
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: AppRoutes.settings,
-                builder: (context, state) => const SettingsScreen(),
-              ),
-            ],
-          ),
-          // Branch 4 – Stats
+          // Branch 3 – Stats
           StatefulShellBranch(
             routes: [
               GoRoute(
                 path: AppRoutes.stats,
                 builder: (context, state) => const StatsScreen(),
+              ),
+            ],
+          ),
+          // Branch 4 – Settings
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.settings,
+                builder: (context, state) => const SettingsScreen(),
               ),
             ],
           ),

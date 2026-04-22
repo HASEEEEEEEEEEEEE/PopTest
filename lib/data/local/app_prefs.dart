@@ -7,11 +7,6 @@ import '../../features/pop_study/pop_models.dart';
 import '../../features/pop_study/pop_metrics_model.dart';
 
 /// Thin wrapper around [SharedPreferences] for app-level persistence.
-///
-/// Stores:
-/// * The ID of the deck selected for pop-study (nullable).
-/// * Per-card learning states, keyed by `card_state_{deckId}_{cardId}`.
-/// * Pop-study settings: target services, interval, and per-session count.
 class AppPrefs {
   AppPrefs(this._prefs);
 
@@ -38,25 +33,18 @@ class AppPrefs {
   String _cardStateKey(String deckId, String cardId) =>
       '$_prefixCardState${deckId}_$cardId';
 
-  CardState? getCardState(String deckId, String cardId) {
-    final raw = _prefs.getString(_cardStateKey(deckId, cardId));
-    return raw == null ? null : _parseCardState(raw);
-  }
-
   Future<void> setCardState(
       String deckId, String cardId, CardState state) async {
     await _prefs.setString(
         _cardStateKey(deckId, cardId), _serializeCardState(state));
   }
 
-  /// Returns a map of cardId → persisted [CardState] for all given [cardIds].
-  /// Cards with no saved state are omitted (caller uses the model default).
   Map<String, CardState> loadCardStates(
       String deckId, Iterable<String> cardIds) {
     final result = <String, CardState>{};
     for (final cardId in cardIds) {
-      final s = getCardState(deckId, cardId);
-      if (s != null) result[cardId] = s;
+      final raw = _prefs.getString(_cardStateKey(deckId, cardId));
+      if (raw != null) result[cardId] = _parseCardState(raw);
     }
     return result;
   }
@@ -73,59 +61,79 @@ class AppPrefs {
         'new' => CardState.newCard,
         'learning' => CardState.learning,
         'review' => CardState.review,
-        _ => CardState.newCard, // forward-compat fallback
+        _ => CardState.newCard,
       };
 
   // ── Pop-study settings ─────────────────────────────────────────────────────
 
-  static const _keyPopServices = 'pop_services';
+  // New key for package names (replaces old pop_services).
+  static const _keyPopPackageNames = 'pop_package_names';
+  // Legacy key kept only for one-time migration.
+  static const _keyPopServicesLegacy = 'pop_services';
   static const _keyPopCustomUrls = 'pop_custom_urls';
   static const _keyPopIntervalMinutes = 'pop_interval_minutes';
   static const _keyPopCount = 'pop_count';
+
   static const _prefixDeckPopUseGlobal = 'deck_pop_use_global_';
-  static const _prefixDeckPopServices = 'deck_pop_services_';
+  static const _prefixDeckPopPackageNames = 'deck_pop_package_names_';
+  static const _prefixDeckPopServicesLegacy = 'deck_pop_services_';
   static const _prefixDeckPopCustomUrls = 'deck_pop_custom_urls_';
   static const _prefixDeckPopIntervalMinutes = 'deck_pop_interval_minutes_';
   static const _prefixDeckPopCount = 'deck_pop_count_';
   static const _prefixDeckName = 'deck_name_';
   static const _prefixDeckCards = 'deck_cards_';
 
-  /// Loads all pop-study settings, falling back to [PopSettings.defaults].
-  PopSettings loadPopSettings() {
-    final serviceNames = _prefs.getString(_keyPopServices);
-    final services = serviceNames == null || serviceNames.isEmpty
-        ? const <PopService>{}
-        : serviceNames
-            .split(',')
-            .map(_parsePopService)
-            .whereType<PopService>()
-            .toSet();
+  // Maps old service names → package names for one-time migration.
+  static const _legacyServicePackages = {
+    'youtube': ['com.google.android.youtube', 'app.rvx.android.youtube'],
+    'twitter': ['com.twitter.android'],
+    'instagram': ['com.instagram.android'],
+    'tiktok': ['com.zhiliaoapp.musically', 'com.ss.android.ugc.trill'],
+  };
 
+  PopSettings loadPopSettings() {
     final intervalMinutes = _prefs.getInt(_keyPopIntervalMinutes) ??
         PopSettings.defaultIntervalMinutes;
     final popCount = _prefs.getInt(_keyPopCount) ?? PopSettings.defaultPopCount;
-    final customUrls =
+    final customUrlsList =
         _prefs.getStringList(_keyPopCustomUrls) ?? const <String>[];
+    final customUrls = customUrlsList
+        .map((u) => u.trim())
+        .where((u) => u.isNotEmpty)
+        .toSet();
+
+    final packageNamesList = _prefs.getStringList(_keyPopPackageNames);
+    Set<String> packageNames;
+    if (packageNamesList != null) {
+      packageNames =
+          packageNamesList.where((s) => s.isNotEmpty).toSet();
+    } else {
+      // One-time migration from old pop_services key.
+      final legacyServices = _prefs.getString(_keyPopServicesLegacy) ?? '';
+      packageNames = legacyServices
+          .split(',')
+          .expand((s) => _legacyServicePackages[s.trim()] ?? <String>[])
+          .toSet();
+      // Persist migrated value immediately (fire-and-forget).
+      _prefs.setStringList(
+          _keyPopPackageNames, packageNames.toList());
+    }
 
     return PopSettings(
-      services: services,
-      customUrls: customUrls
-          .map((url) => url.trim())
-          .where((url) => url.isNotEmpty)
-          .toSet(),
-      intervalMinutes: intervalMinutes.clamp(
-          PopSettings.minIntervalMinutes, PopSettings.maxIntervalMinutes),
-      popCount:
-          popCount.clamp(PopSettings.minPopCount, PopSettings.maxPopCount),
+      packageNames: packageNames,
+      customUrls: customUrls,
+      intervalMinutes:
+          intervalMinutes.clamp(PopSettings.minIntervalMinutes, PopSettings.maxIntervalMinutes),
+      popCount: popCount.clamp(PopSettings.minPopCount, PopSettings.maxPopCount),
     );
   }
 
-  Future<void> setPopServices(Set<PopService> services) async {
-    if (services.isEmpty) {
-      await _prefs.remove(_keyPopServices);
+  Future<void> setPopPackageNames(Set<String> packageNames) async {
+    if (packageNames.isEmpty) {
+      await _prefs.remove(_keyPopPackageNames);
     } else {
-      await _prefs.setString(
-          _keyPopServices, services.map(_serializePopService).join(','));
+      await _prefs.setStringList(
+          _keyPopPackageNames, packageNames.toList());
     }
   }
 
@@ -136,10 +144,7 @@ class AppPrefs {
     }
     await _prefs.setStringList(
       _keyPopCustomUrls,
-      customUrls
-          .map((url) => url.trim())
-          .where((url) => url.isNotEmpty)
-          .toList(),
+      customUrls.map((u) => u.trim()).where((u) => u.isNotEmpty).toList(),
     );
   }
 
@@ -152,18 +157,34 @@ class AppPrefs {
   }
 
   DeckPopSettings loadDeckPopSettings(String deckId) {
-    final useGlobal = _prefs.getBool('$_prefixDeckPopUseGlobal$deckId') ?? true;
-    final serviceNames = _prefs.getString('$_prefixDeckPopServices$deckId');
-    final services = serviceNames == null || serviceNames.isEmpty
-        ? const <PopService>{}
-        : serviceNames
-            .split(',')
-            .map(_parsePopService)
-            .whereType<PopService>()
-            .toSet();
-    final customUrls =
+    final useGlobal =
+        _prefs.getBool('$_prefixDeckPopUseGlobal$deckId') ?? true;
+    final customUrlsList =
         _prefs.getStringList('$_prefixDeckPopCustomUrls$deckId') ??
             const <String>[];
+    final customUrls = customUrlsList
+        .map((u) => u.trim())
+        .where((u) => u.isNotEmpty)
+        .toSet();
+
+    final pkgList =
+        _prefs.getStringList('$_prefixDeckPopPackageNames$deckId');
+    Set<String> packageNames;
+    if (pkgList != null) {
+      packageNames = pkgList.where((s) => s.isNotEmpty).toSet();
+    } else {
+      final legacy =
+          _prefs.getString('$_prefixDeckPopServicesLegacy$deckId') ?? '';
+      packageNames = legacy
+          .split(',')
+          .expand((s) => _legacyServicePackages[s.trim()] ?? <String>[])
+          .toSet();
+      if (packageNames.isNotEmpty) {
+        _prefs.setStringList(
+            '$_prefixDeckPopPackageNames$deckId', packageNames.toList());
+      }
+    }
+
     final intervalMinutes =
         _prefs.getInt('$_prefixDeckPopIntervalMinutes$deckId') ??
             PopSettings.defaultIntervalMinutes;
@@ -172,11 +193,8 @@ class AppPrefs {
 
     return DeckPopSettings(
       useGlobal: useGlobal,
-      services: services,
-      customUrls: customUrls
-          .map((url) => url.trim())
-          .where((url) => url.isNotEmpty)
-          .toSet(),
+      packageNames: packageNames,
+      customUrls: customUrls,
       intervalMinutes: intervalMinutes.clamp(
           PopSettings.minIntervalMinutes, PopSettings.maxIntervalMinutes),
       popCount:
@@ -186,12 +204,13 @@ class AppPrefs {
 
   Future<void> setDeckPopSettings(
       String deckId, DeckPopSettings settings) async {
-    await _prefs.setBool('$_prefixDeckPopUseGlobal$deckId', settings.useGlobal);
-    if (settings.services.isEmpty) {
-      await _prefs.remove('$_prefixDeckPopServices$deckId');
+    await _prefs.setBool(
+        '$_prefixDeckPopUseGlobal$deckId', settings.useGlobal);
+    if (settings.packageNames.isEmpty) {
+      await _prefs.remove('$_prefixDeckPopPackageNames$deckId');
     } else {
-      await _prefs.setString('$_prefixDeckPopServices$deckId',
-          settings.services.map(_serializePopService).join(','));
+      await _prefs.setStringList(
+          '$_prefixDeckPopPackageNames$deckId', settings.packageNames.toList());
     }
     if (settings.customUrls.isEmpty) {
       await _prefs.remove('$_prefixDeckPopCustomUrls$deckId');
@@ -199,8 +218,8 @@ class AppPrefs {
       await _prefs.setStringList(
         '$_prefixDeckPopCustomUrls$deckId',
         settings.customUrls
-            .map((url) => url.trim())
-            .where((url) => url.isNotEmpty)
+            .map((u) => u.trim())
+            .where((u) => u.isNotEmpty)
             .toList(),
       );
     }
@@ -276,25 +295,14 @@ class AppPrefs {
     return cards;
   }
 
-  static String _serializePopService(PopService s) => s.name;
-
-  static PopService? _parsePopService(String raw) {
-    for (final s in PopService.values) {
-      if (s.name == raw) return s;
-    }
-    return null; // forward-compat: unknown values are silently dropped
-  }
-
   // ── Pop-study active state ─────────────────────────────────────────────────
 
   static const _keyPopStudyActive = 'pop_study_active';
   static const _keyPopMetricShownCount = 'pop_metric_shown_count';
   static const _keyPopMetricStartCount = 'pop_metric_start_count';
   static const _keyPopMetricSnoozeCount = 'pop_metric_snooze_count';
-  static const _keyPopMetricTrackedEventCount =
-      'pop_metric_tracked_event_count';
-  static const _keyPopMetricMatchedEventCount =
-      'pop_metric_matched_event_count';
+  static const _keyPopMetricTrackedEventCount = 'pop_metric_tracked_event_count';
+  static const _keyPopMetricMatchedEventCount = 'pop_metric_matched_event_count';
   static const _keyPopMetricMatchedActiveSeconds =
       'pop_metric_matched_active_seconds';
   static const _keyPopMetricLastPopupAt = 'pop_metric_last_popup_at';
@@ -304,7 +312,6 @@ class AppPrefs {
   static const _keyPopMetricViewingSecondsForCurrentInterval =
       'pop_metric_viewing_seconds_for_current_interval';
 
-  /// Whether pop-study monitoring mode is currently enabled.
   bool get popStudyActive => _prefs.getBool(_keyPopStudyActive) ?? false;
 
   Future<void> setPopStudyActive(bool active) async {
@@ -319,10 +326,8 @@ class AppPrefs {
     final matched = _prefs.getInt(_keyPopMetricMatchedEventCount) ?? 0;
     final matchedActiveSeconds =
         _prefs.getInt(_keyPopMetricMatchedActiveSeconds) ?? 0;
-    final viewingSeconds = _prefs.getInt(
-          _keyPopMetricViewingSecondsForCurrentInterval,
-        ) ??
-        0;
+    final viewingSeconds =
+        _prefs.getInt(_keyPopMetricViewingSecondsForCurrentInterval) ?? 0;
     return PopMetrics(
       trackedEventCount: tracked,
       matchedEventCount: matched,

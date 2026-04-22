@@ -1,17 +1,6 @@
 /// Card states used by the spaced-repetition scheduler.
 enum CardState { newCard, learning, review }
 
-/// SNS services selectable for pop-study interruption.
-enum PopService {
-  twitter('Twitter / X'),
-  instagram('Instagram'),
-  youtube('YouTube'),
-  tiktok('TikTok');
-
-  const PopService(this.label);
-  final String label;
-}
-
 /// Review quality ratings (SM-2 algorithm).
 enum ReviewRating {
   again, // 完全に忘れた
@@ -20,9 +9,21 @@ enum ReviewRating {
   easy, // 簡単だった
 }
 
+/// URL patterns associated with well-known social-media packages.
+/// When a package is selected for monitoring, its URL patterns are
+/// automatically included so browser-based access is also tracked.
+const Map<String, Set<String>> knownPackageUrlPatterns = {
+  'com.google.android.youtube': {'youtube.com', 'youtu.be', 'm.youtube.com'},
+  'app.rvx.android.youtube': {'youtube.com', 'youtu.be', 'm.youtube.com'},
+  'com.twitter.android': {'twitter.com', 'x.com'},
+  'com.instagram.android': {'instagram.com'},
+  'com.zhiliaoapp.musically': {'tiktok.com'},
+  'com.ss.android.ugc.trill': {'tiktok.com'},
+};
+
 class PopSettings {
   const PopSettings({
-    required this.services,
+    required this.packageNames,
     required this.customUrls,
     required this.intervalMinutes,
     required this.popCount,
@@ -35,26 +36,35 @@ class PopSettings {
   static const int minPopCount = 1;
   static const int maxPopCount = 10;
 
-  final Set<PopService> services;
+  final Set<String> packageNames;
   final Set<String> customUrls;
   final int intervalMinutes;
   final int popCount;
 
+  /// All URL patterns to monitor: [customUrls] + those derived from [packageNames].
+  Set<String> get effectiveUrls {
+    final urls = Set<String>.of(customUrls);
+    for (final pkg in packageNames) {
+      urls.addAll(knownPackageUrlPatterns[pkg] ?? const {});
+    }
+    return urls;
+  }
+
   factory PopSettings.defaults() => const PopSettings(
-        services: {},
+        packageNames: {},
         customUrls: {},
         intervalMinutes: defaultIntervalMinutes,
         popCount: defaultPopCount,
       );
 
   PopSettings copyWith({
-    Set<PopService>? services,
+    Set<String>? packageNames,
     Set<String>? customUrls,
     int? intervalMinutes,
     int? popCount,
   }) {
     return PopSettings(
-      services: services ?? this.services,
+      packageNames: packageNames ?? this.packageNames,
       customUrls: customUrls ?? this.customUrls,
       intervalMinutes: (intervalMinutes ?? this.intervalMinutes)
           .clamp(minIntervalMinutes, maxIntervalMinutes),
@@ -66,21 +76,21 @@ class PopSettings {
 class DeckPopSettings {
   const DeckPopSettings({
     required this.useGlobal,
-    required this.services,
+    required this.packageNames,
     required this.customUrls,
     required this.intervalMinutes,
     required this.popCount,
   });
 
   final bool useGlobal;
-  final Set<PopService> services;
+  final Set<String> packageNames;
   final Set<String> customUrls;
   final int intervalMinutes;
   final int popCount;
 
   factory DeckPopSettings.defaults() => const DeckPopSettings(
         useGlobal: true,
-        services: {},
+        packageNames: {},
         customUrls: {},
         intervalMinutes: PopSettings.defaultIntervalMinutes,
         popCount: PopSettings.defaultPopCount,
@@ -88,14 +98,14 @@ class DeckPopSettings {
 
   DeckPopSettings copyWith({
     bool? useGlobal,
-    Set<PopService>? services,
+    Set<String>? packageNames,
     Set<String>? customUrls,
     int? intervalMinutes,
     int? popCount,
   }) {
     return DeckPopSettings(
       useGlobal: useGlobal ?? this.useGlobal,
-      services: services ?? this.services,
+      packageNames: packageNames ?? this.packageNames,
       customUrls: customUrls ?? this.customUrls,
       intervalMinutes: (intervalMinutes ?? this.intervalMinutes).clamp(
           PopSettings.minIntervalMinutes, PopSettings.maxIntervalMinutes),
@@ -107,7 +117,7 @@ class DeckPopSettings {
   PopSettings resolve(PopSettings global) {
     if (useGlobal) return global;
     return PopSettings(
-      services: services,
+      packageNames: packageNames,
       customUrls: customUrls,
       intervalMinutes: intervalMinutes,
       popCount: popCount,
@@ -133,20 +143,10 @@ class CardModel {
   final String front;
   final String back;
   final CardState state;
-
-  /// 次回復習予定日時（null=未スケジュール）
   final DateTime? dueAt;
-
-  /// 次の復習まで何日か（SM-2）
   final int intervalDays;
-
-  /// 難易度係数（SM-2、初期値2.5、最小1.3）
   final double easeFactor;
-
-  /// 連続正解回数（SM-2）
   final int repetitions;
-
-  /// 忘却回数（統計用）
   final int lapses;
 
   CardModel copyWith({

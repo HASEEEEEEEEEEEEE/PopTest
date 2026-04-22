@@ -10,7 +10,6 @@ class ShellScaffold extends StatelessWidget {
   void _onTap(int index) {
     navigationShell.goBranch(
       index,
-      // Return to the initial branch location when re-tapping the current tab.
       initialLocation: index == navigationShell.currentIndex,
     );
   }
@@ -30,24 +29,24 @@ class ShellScaffold extends StatelessWidget {
             label: 'ホーム',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.visibility_outlined),
+            activeIcon: Icon(Icons.visibility),
+            label: '監視',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.layers_outlined),
             activeIcon: Icon(Icons.layers),
             label: 'デッキ',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.school_outlined),
-            activeIcon: Icon(Icons.school),
-            label: 'レビュー',
+            icon: Icon(Icons.bar_chart_outlined),
+            activeIcon: Icon(Icons.bar_chart),
+            label: '統計',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings_outlined),
             activeIcon: Icon(Icons.settings),
             label: '設定',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart_outlined),
-            activeIcon: Icon(Icons.bar_chart),
-            label: '統計',
           ),
         ],
       ),

@@ -86,8 +86,8 @@ class UsageMonitorService : Service() {
     }
 
     private fun updateTargets(intent: Intent) {
-        val services =
-            intent.getStringArrayListExtra(extraServices)?.toSet() ?: emptySet()
+        val packageNames =
+            intent.getStringArrayListExtra(extraPackageNames)?.toSet() ?: emptySet()
         val customUrls =
             intent.getStringArrayListExtra(extraCustomUrls)?.toSet() ?: emptySet()
         val intervalMinutes = intent.getIntExtra(extraIntervalMinutes, defaultIntervalMinutes)
@@ -98,21 +98,9 @@ class UsageMonitorService : Service() {
         viewingSecondsForCurrentInterval = 0
         lastTrackingAtMs = null
         dismissOverlay()
-        targetPackages = services
-            .flatMap { service -> packagesForService(service) }
-            .toSet()
-        val serviceUrls = services.flatMap { urlPatternsForService(it) }.toSet()
-        BrowserUrlMonitorState.updateTargets(customUrls + serviceUrls)
-    }
-
-    private fun urlPatternsForService(service: String): Set<String> {
-        return when (service) {
-            "youtube" -> setOf("youtube.com", "youtu.be", "m.youtube.com")
-            "twitter" -> setOf("twitter.com", "x.com")
-            "instagram" -> setOf("instagram.com")
-            "tiktok" -> setOf("tiktok.com")
-            else -> emptySet()
-        }
+        // Flutter side already computes effective URLs (including known-package patterns).
+        targetPackages = packageNames
+        BrowserUrlMonitorState.updateTargets(customUrls)
     }
 
     private fun emitForegroundMatchEvent() {
@@ -355,7 +343,7 @@ class UsageMonitorService : Service() {
     companion object {
         private const val actionStart = "com.example.poptest.action.START_MONITORING"
         private const val actionStop = "com.example.poptest.action.STOP_MONITORING"
-        private const val extraServices = "services"
+        private const val extraPackageNames = "packageNames"
         private const val extraCustomUrls = "customUrls"
         private const val extraIntervalMinutes = "intervalMinutes"
         private const val extraPopCount = "popCount"
@@ -378,7 +366,7 @@ class UsageMonitorService : Service() {
 
         fun start(
             context: Context,
-            services: List<String>,
+            packageNames: List<String>,
             customUrls: List<String>,
             intervalMinutes: Int,
             popCount: Int,
@@ -386,7 +374,7 @@ class UsageMonitorService : Service() {
         ) {
             val intent = Intent(context, UsageMonitorService::class.java)
                 .setAction(actionStart)
-                .putStringArrayListExtra(extraServices, ArrayList(services))
+                .putStringArrayListExtra(extraPackageNames, ArrayList(packageNames))
                 .putStringArrayListExtra(extraCustomUrls, ArrayList(customUrls))
                 .putExtra(extraIntervalMinutes, intervalMinutes)
                 .putExtra(extraPopCount, popCount)
@@ -414,17 +402,5 @@ class UsageMonitorService : Service() {
             return !stats.isNullOrEmpty()
         }
 
-        private fun packagesForService(service: String): Set<String> {
-            return when (service) {
-                "twitter" -> setOf("com.twitter.android")
-                "instagram" -> setOf("com.instagram.android")
-                "youtube" -> setOf(
-                    "com.google.android.youtube",
-                    "app.rvx.android.youtube",
-                )
-                "tiktok" -> setOf("com.zhiliaoapp.musically", "com.ss.android.ugc.trill")
-                else -> emptySet()
-            }
-        }
     }
 }
