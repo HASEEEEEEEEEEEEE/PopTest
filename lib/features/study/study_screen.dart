@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,29 +16,48 @@ class StudyScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(studyProvider(deckId));
+    final controller = ref.read(studyProvider(deckId).notifier);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('学習')),
+      appBar: AppBar(
+        title: const Text('学習'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.undo),
+            tooltip: '元に戻す',
+            onPressed: state.canUndo ? () => unawaited(controller.undo()) : null,
+          ),
+        ],
+      ),
       body: state.isDone
-          ? _buildDoneView(context)
+          ? _buildDoneView(context, state, controller)
           : _buildStudyView(context, ref, state),
     );
   }
 
-  Widget _buildDoneView(BuildContext context) {
+  Widget _buildDoneView(
+      BuildContext context, StudyState state, StudyController controller) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.check_circle_outline, size: 64, color: Colors.green),
           const SizedBox(height: 16),
-          Text('今日の学習は完了です！', style: Theme.of(context).textTheme.headlineSmall),
+          Text('今日の学習は完了です！',
+              style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
           Text(
             '次の復習カードが到来するまでお待ちください',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 32),
+          if (state.canUndo)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.undo),
+              label: const Text('最後の回答を取り消す'),
+              onPressed: () => unawaited(controller.undo()),
+            ),
+          if (state.canUndo) const SizedBox(height: 12),
           FilledButton(
             onPressed: () => context.pop(),
             child: const Text('デッキに戻る'),
@@ -53,14 +74,13 @@ class StudyScreen extends ConsumerWidget {
     return Column(
       children: [
         _CountsBar(state: state, currentState: card.state),
-        const Divider(),
+        const Divider(height: 1),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
-                Expanded(
-                    child: _CardFace(card: card, showBack: state.showBack)),
+                Expanded(child: _CardFace(card: card, showBack: state.showBack)),
                 const SizedBox(height: 16),
                 if (!state.showBack)
                   SizedBox(
@@ -112,12 +132,14 @@ class _CountsBar extends StatelessWidget {
     final highlight = current == target;
     return Column(
       children: [
-        Text('$count',
-            style: theme.textTheme.titleLarge?.copyWith(
-              color: color,
-              fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
-              decoration: highlight ? TextDecoration.underline : null,
-            )),
+        Text(
+          '$count',
+          style: theme.textTheme.titleLarge?.copyWith(
+            color: color,
+            fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
+            decoration: highlight ? TextDecoration.underline : null,
+          ),
+        ),
         Text(label, style: theme.textTheme.bodySmall),
       ],
     );
@@ -182,7 +204,7 @@ class _RatingButtons extends ConsumerWidget {
     final ratings = [
       (ReviewRating.again, 'もう一度', Colors.red),
       (ReviewRating.hard, '難しい', Colors.orange),
-      (ReviewRating.good, '普通', Colors.blue),
+      (ReviewRating.good, '正解', Colors.blue),
       (ReviewRating.easy, '簡単', Colors.green),
     ];
 
@@ -194,7 +216,7 @@ class _RatingButtons extends ConsumerWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: OutlinedButton(
-              onPressed: () => controller.rate(rating),
+              onPressed: () => unawaited(controller.rate(rating)),
               style: OutlinedButton.styleFrom(
                 foregroundColor: color,
                 padding: const EdgeInsets.symmetric(vertical: 12),

@@ -66,9 +66,7 @@ class MonitoringScreen extends ConsumerWidget {
               ),
             ),
           ...urls.map((url) => ListTile(
-                leading: const CircleAvatar(
-                  child: Icon(Icons.language),
-                ),
+                leading: _FaviconAvatar(domain: url),
                 title: Text(url, overflow: TextOverflow.ellipsis),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline),
@@ -130,6 +128,28 @@ class _SectionHeader extends StatelessWidget {
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: Theme.of(context).colorScheme.primary,
             ),
+      ),
+    );
+  }
+}
+
+class _FaviconAvatar extends StatelessWidget {
+  const _FaviconAvatar({required this.domain});
+  final String domain;
+
+  @override
+  Widget build(BuildContext context) {
+    final host = domain.contains('://') ? domain : 'https://$domain';
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(
+        'https://www.google.com/s2/favicons?domain_url=$host&sz=64',
+        width: 40,
+        height: 40,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const CircleAvatar(
+          child: Icon(Icons.language),
+        ),
       ),
     );
   }

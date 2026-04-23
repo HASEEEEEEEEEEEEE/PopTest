@@ -7,8 +7,12 @@ import 'package:flutter/services.dart';
 
 import 'pop_counts.dart';
 import 'pop_models.dart';
+import 'pop_study_active_provider.dart';
 import 'pop_study_controller.dart';
+import '../home/selected_deck_provider.dart';
 import '../../core/scheduler/scheduler.dart';
+import '../../routing/router.dart' show AppRoutes;
+import '../pop_study/pop_repository.dart';
 
 class PopStudyScreen extends ConsumerStatefulWidget {
   const PopStudyScreen({super.key, required this.deckId});
@@ -46,6 +50,7 @@ class _PopStudyScreenState extends ConsumerState<PopStudyScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(popStudyProvider(widget.deckId));
+    final controller = ref.read(popStudyProvider(widget.deckId).notifier);
 
     return PopScope(
       canPop: state.isDone,
@@ -61,13 +66,32 @@ class _PopStudyScreenState extends ConsumerState<PopStudyScreen> {
                 ? () => context.pop()
                 : () => unawaited(_confirmExit()),
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.undo),
+              tooltip: '元に戻す',
+              onPressed: state.canUndo ? controller.undo : null,
+            ),
+          ],
         ),
-        body: state.isDone ? _buildDoneView() : _buildStudyView(state),
+        body: state.isDone
+            ? _buildDoneView(state, controller)
+            : _buildStudyView(state),
       ),
     );
   }
 
-  Widget _buildDoneView() {
+  Widget _buildDoneView(PopStudyState state, PopStudyController controller) {
+    final now = DateTime.now();
+    final counts = countDue(state.cardMap.values, now);
+    final noActiveCards =
+        counts.nNew == 0 && counts.nLearning == 0 && counts.nReview == 0;
+    final emptySession = state.answeredCount == 0;
+
+    if (emptySession || noActiveCards) {
+      return _buildDeckFinishedView(state, emptySession: emptySession);
+    }
+
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -76,8 +100,18 @@ class _PopStudyScreenState extends ConsumerState<PopStudyScreen> {
           const SizedBox(height: 16),
           Text('セッション完了！', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
-          Text('お疲れさまでした', style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            '${state.answeredCount}問回答・${state.graduatedCount}枚復習予定',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           const SizedBox(height: 32),
+          if (state.canUndo)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.undo),
+              label: const Text('最後の回答を取り消す'),
+              onPressed: controller.undo,
+            ),
+          if (state.canUndo) const SizedBox(height: 12),
           FilledButton.icon(
             icon: const Icon(Icons.school),
             label: const Text('このまま学習を続ける'),
@@ -93,33 +127,117 @@ class _PopStudyScreenState extends ConsumerState<PopStudyScreen> {
           OutlinedButton.icon(
             icon: const Icon(Icons.arrow_back),
             label: const Text('元のアプリに戻る'),
-            onPressed: () async {
-              const channel = MethodChannel('poptest.pop_monitoring/methods');
-              await channel.invokeMethod('moveTaskToBack');
-            },
+            onPressed: _moveTaskToBack,
           ),
         ],
       ),
     );
   }
 
+  Widget _buildDeckFinishedView(PopStudyState state,
+      {required bool emptySession}) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              emptySession ? Icons.inbox_outlined : Icons.celebration_outlined,
+              size: 64,
+              color: emptySession ? Colors.grey : Colors.green,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              emptySession
+                  ? '学習できるカードがありません'
+                  : 'このデッキの学習が完了しました！',
+              style: theme.textTheme.headlineSmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              emptySession
+                  ? '現在学習対象のカードがありません'
+                  : '${state.answeredCount}問回答・${state.graduatedCount}枚復習予定',
+              style: theme.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            FilledButton.icon(
+              icon: const Icon(Icons.swap_horiz),
+              label: const Text('別のデッキに変更'),
+              onPressed: () => unawaited(_showDeckSelector()),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.stop_circle_outlined),
+              label: const Text('ポップ学習を停止'),
+              onPressed: () async {
+                await ref
+                    .read(popStudyActiveProvider.notifier)
+                    .setActive(false);
+                if (mounted) context.go(AppRoutes.home);
+              },
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('元のアプリに戻る'),
+              onPressed: _moveTaskToBack,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showDeckSelector() async {
+    final deckMap = ref.read(deckRepositoryProvider);
+    final decks = deckMap.values.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('デッキを選択',
+                  style: Theme.of(ctx).textTheme.titleMedium),
+            ),
+            const Divider(height: 1),
+            ...decks.map((deck) => ListTile(
+                  title: Text(deck.name),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () async {
+                    await ref
+                        .read(selectedDeckProvider.notifier)
+                        .select(deck.deckId);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) context.go(AppRoutes.home);
+                  },
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _moveTaskToBack() async {
+    const channel = MethodChannel('poptest.pop_monitoring/methods');
+    await channel.invokeMethod('moveTaskToBack');
+  }
+
   Widget _buildStudyView(PopStudyState state) {
     final current = state.currentCard!;
-    final sessionCounts = countAll(state.queue);
-    final deckCounts = countAll(state.cardMap.values);
 
     return Column(
       children: [
-        _CountsBar(
-          label: 'セッション残り',
-          counts: sessionCounts,
-          currentState: current.state,
-        ),
-        _CountsBar(
-          label: 'デッキ全体',
-          counts: deckCounts,
-          currentState: current.state,
-        ),
+        _SessionBar(state: state, currentState: current.state),
         const Divider(),
         Expanded(
           child: Padding(
@@ -149,41 +267,60 @@ class _PopStudyScreenState extends ConsumerState<PopStudyScreen> {
   }
 }
 
-class _CountsBar extends StatelessWidget {
-  const _CountsBar({
-    required this.label,
-    required this.counts,
-    required this.currentState,
-  });
+class _SessionBar extends StatelessWidget {
+  const _SessionBar({required this.state, required this.currentState});
 
-  final String label;
-  final ({int nNew, int nLearning, int nReview, int total}) counts;
+  final PopStudyState state;
   final CardState currentState;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final remaining = state.popCount - state.answeredCount;
+    final now = DateTime.now();
+    final counts = countDue(state.cardMap.values, now);
+    final nNew = counts.nNew;
+    final nLearning = counts.nLearning;
+    final nReview = counts.nReview;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
-          Text('$label: ${counts.total}枚', style: theme.textTheme.bodySmall),
+          Text(
+            '残り $remaining問',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(width: 8),
           const Text('| '),
           _CountChip(
-            label: '未学習: ${counts.nNew}',
+            label: '未学習',
+            count: nNew,
             highlight: currentState == CardState.newCard,
           ),
           const SizedBox(width: 4),
           _CountChip(
-            label: '学習中: ${counts.nLearning}',
+            label: '学習中',
+            count: nLearning,
             highlight: currentState == CardState.learning,
           ),
           const SizedBox(width: 4),
           _CountChip(
-            label: '復習中: ${counts.nReview}',
+            label: '復習中',
+            count: nReview,
             highlight: currentState == CardState.review,
           ),
+          if (state.graduatedCount > 0) ...[
+            const SizedBox(width: 4),
+            _CountChip(
+              label: '復習予定',
+              count: state.graduatedCount,
+              highlight: false,
+              color: Colors.green,
+            ),
+          ],
         ],
       ),
     );
@@ -191,21 +328,29 @@ class _CountsBar extends StatelessWidget {
 }
 
 class _CountChip extends StatelessWidget {
-  const _CountChip({required this.label, required this.highlight});
+  const _CountChip({
+    required this.label,
+    required this.count,
+    required this.highlight,
+    this.color,
+  });
 
   final String label;
+  final int count;
   final bool highlight;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final effectiveColor = color ??
+        (highlight ? theme.colorScheme.primary : theme.colorScheme.onSurface);
     return Text(
-      label,
+      '$label: $count',
       style: theme.textTheme.bodySmall?.copyWith(
         decoration: highlight ? TextDecoration.underline : TextDecoration.none,
         fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
-        color:
-            highlight ? theme.colorScheme.primary : theme.colorScheme.onSurface,
+        color: effectiveColor,
         decorationColor: highlight ? theme.colorScheme.primary : null,
         decorationThickness: highlight ? 2 : null,
       ),
@@ -275,7 +420,7 @@ class _AnswerButtons extends ConsumerWidget {
     final ratings = [
       (ReviewRating.again, 'もう一度', Colors.red),
       (ReviewRating.hard, '難しい', Colors.orange),
-      (ReviewRating.good, '普通', Colors.blue),
+      (ReviewRating.good, '正解', Colors.blue),
       (ReviewRating.easy, '簡単', Colors.green),
     ];
 

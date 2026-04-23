@@ -23,7 +23,7 @@ class DeckScreen extends ConsumerWidget {
       );
     }
     final deck = deckMap[deckId] ?? deckMap.values.first;
-    final counts = countAll(deck.cards);
+    final counts = countDue(deck.cards, DateTime.now());
 
     return Scaffold(
       appBar: AppBar(title: Text(deck.name)),
@@ -57,6 +57,11 @@ class DeckScreen extends ConsumerWidget {
                             label: '復習中',
                             count: counts.nReview,
                             color: Colors.green),
+                        if (counts.nScheduled > 0)
+                          _StateCount(
+                              label: '復習予定',
+                              count: counts.nScheduled,
+                              color: Colors.teal),
                       ],
                     ),
                   ],

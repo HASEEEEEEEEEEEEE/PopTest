@@ -129,7 +129,7 @@ class DeckEditScreen extends ConsumerWidget {
           ...deck.cards.map((card) => Card(
                 child: ListTile(
                   title: Text(card.front),
-                  subtitle: Text('${card.back}\n状態: ${_stateLabel(card.state)}'),
+                  subtitle: Text('${card.back}\n状態: ${_stateLabel(card)}'),
                   isThreeLine: true,
                   trailing: PopupMenuButton<String>(
                     onSelected: (value) async {
@@ -184,8 +184,15 @@ class DeckEditScreen extends ConsumerWidget {
   }
 }
 
-String _stateLabel(CardState state) => switch (state) {
-      CardState.newCard => '未学習',
-      CardState.learning => '学習中',
-      CardState.review => '復習中',
-    };
+String _stateLabel(CardModel card) {
+  switch (card.state) {
+    case CardState.newCard:
+      return '未学習';
+    case CardState.learning:
+      return '学習中';
+    case CardState.review:
+      final due = card.dueAt;
+      if (due == null || !due.isAfter(DateTime.now())) return '復習中';
+      return '復習予定';
+  }
+}

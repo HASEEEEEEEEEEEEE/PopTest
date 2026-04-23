@@ -220,18 +220,42 @@ class NativePopMonitoringBridge {
         'getMonitoringPermissionStatus',
       );
       if (raw == null) {
-        return const {'usageAccess': false, 'accessibilityEnabled': false};
+        return const {
+          'usageAccess': false,
+          'accessibilityEnabled': false,
+          'overlayEnabled': false,
+        };
       }
       return {
         'usageAccess': raw['usageAccess'] == true,
         'accessibilityEnabled': raw['accessibilityEnabled'] == true,
+        'overlayEnabled': raw['overlayEnabled'] == true,
       };
     } on MissingPluginException catch (e) {
       debugPrint('Permission status plugin missing: $e');
-      return const {'usageAccess': false, 'accessibilityEnabled': false};
+      return const {
+        'usageAccess': false,
+        'accessibilityEnabled': false,
+        'overlayEnabled': false,
+      };
     } on PlatformException catch (e) {
       debugPrint('Failed to get permission status: $e');
-      return const {'usageAccess': false, 'accessibilityEnabled': false};
+      return const {
+        'usageAccess': false,
+        'accessibilityEnabled': false,
+        'overlayEnabled': false,
+      };
+    }
+  }
+
+  Future<void> openOverlaySettings() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _methodChannel.invokeMethod<void>('openOverlaySettings');
+    } on MissingPluginException catch (e) {
+      debugPrint('Overlay settings plugin missing: $e');
+    } on PlatformException catch (e) {
+      debugPrint('Failed to open overlay settings: $e');
     }
   }
 }

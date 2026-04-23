@@ -30,31 +30,33 @@ void main() {
     });
   });
 
-  group('countAll', () {
+  group('countDue', () {
+    final now = DateTime.now();
+    final past = now.subtract(const Duration(hours: 1));
+    final future = now.add(const Duration(days: 2));
+
     test('returns zeros for empty list', () {
-      final counts = countAll([]);
+      final counts = countDue([], now);
       expect(counts.nNew, 0);
       expect(counts.nLearning, 0);
       expect(counts.nReview, 0);
       expect(counts.total, 0);
     });
 
-    test('counts each state correctly', () {
+    test('counts each state correctly; future review excluded', () {
       final cards = [
-        const CardModel(
-            id: '1', front: '', back: '', state: CardState.newCard),
-        const CardModel(
-            id: '2', front: '', back: '', state: CardState.newCard),
-        const CardModel(
-            id: '3', front: '', back: '', state: CardState.learning),
-        const CardModel(
-            id: '4', front: '', back: '', state: CardState.review),
+        const CardModel(id: '1', front: '', back: '', state: CardState.newCard),
+        const CardModel(id: '2', front: '', back: '', state: CardState.newCard),
+        const CardModel(id: '3', front: '', back: '', state: CardState.learning),
+        CardModel(id: '4', front: '', back: '', state: CardState.review, dueAt: past),
+        CardModel(id: '5', front: '', back: '', state: CardState.review, dueAt: future),
       ];
-      final counts = countAll(cards);
+      final counts = countDue(cards, now);
       expect(counts.nNew, 2);
       expect(counts.nLearning, 1);
       expect(counts.nReview, 1);
-      expect(counts.total, 4);
+      expect(counts.nScheduled, 1); // future review card
+      expect(counts.total, 5);
     });
   });
 

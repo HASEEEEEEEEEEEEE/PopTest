@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,6 +8,7 @@ import '../features/deck/deck_edit_screen.dart';
 import '../features/deck/deck_pop_settings_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/monitoring/monitoring_screen.dart';
+import '../features/pop_study/pop_prompt_screen.dart';
 import '../features/pop_study/pop_study_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/stats/stats_screen.dart';
@@ -31,6 +32,21 @@ final routerProvider = Provider<GoRouter>((ref) {
     debugLogDiagnostics: true,
     initialLocation: AppRoutes.home,
     routes: [
+      GoRoute(
+        path: '/pop-prompt/:deckId',
+        pageBuilder: (context, state) {
+          final deckId = state.pathParameters['deckId']!;
+          return CustomTransitionPage(
+            key: state.pageKey,
+            opaque: false,
+            barrierColor: Colors.black54,
+            barrierDismissible: false,
+            child: PopPromptScreen(deckId: deckId),
+            transitionsBuilder: (context, animation, secondary, child) =>
+                FadeTransition(opacity: animation, child: child),
+          );
+        },
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             ShellScaffold(navigationShell: navigationShell),

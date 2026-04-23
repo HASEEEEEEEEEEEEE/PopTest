@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'pop_study_controller.dart';
 import '../../routing/router.dart';
 import '../home/selected_deck_provider.dart';
 import 'deck_pop_settings.dart';
@@ -97,10 +96,11 @@ class PopMonitoringManager {
     if (started) return;
 
     final status = await _nativeBridge.getPermissionStatus();
-    if (status['accessibilityEnabled'] != true) {
-      await _nativeBridge.openAccessibilitySettings();
-    } else {
+    debugPrint('[PopMonitor] permissions: $status');
+    if (status['usageAccess'] != true) {
       await _nativeBridge.openUsageAccessSettings();
+    } else if (status['accessibilityEnabled'] != true) {
+      await _nativeBridge.openAccessibilitySettings();
     }
     await _ref.read(popStudyActiveProvider.notifier).setActive(false);
   }
@@ -125,20 +125,16 @@ class PopMonitoringManager {
       case NativeEventType.popupShown:
         debugPrint('[PopMonitor] popupShown');
         await _ref.read(popMetricsProvider.notifier).recordPopupShown(now);
+        final shownDeckId = event.deckId;
+        if (shownDeckId == null || shownDeckId.isEmpty) return;
+        _ref.read(routerProvider).go('/pop-prompt/$shownDeckId');
 
       case NativeEventType.popupSnooze:
         debugPrint('[PopMonitor] popupSnooze');
         await _ref.read(popMetricsProvider.notifier).recordPopupSnooze();
 
       case NativeEventType.popupStart:
-        debugPrint('[PopMonitor] popupStart deckId=${event.deckId}');
-        await _ref.read(popMetricsProvider.notifier).recordPopupStart(now);
-        final deckId = event.deckId;
-        if (deckId == null || deckId.isEmpty) return;
-        // プロバイダーを強制リセット
-        _ref.invalidate(popStudyProvider(deckId));
-        final router = _ref.read(routerProvider);
-        router.go('/decks/$deckId/pop'); // クエリパラメータ不要
+        debugPrint('[PopMonitor] popupStart (handled in PopPromptScreen)');
 
       case NativeEventType.unknown:
         debugPrint('[PopMonitor] unknown event type');

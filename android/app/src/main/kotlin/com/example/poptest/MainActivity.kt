@@ -209,8 +209,7 @@ class MainActivity : FlutterActivity() {
 
     private fun hasRequiredPermissions(): Boolean {
         if (!UsageMonitorService.isUsageAccessGranted(this)) return false
-        if (!AccessibilityMonitorService.isAccessibilityEnabled(this)) return false
-        return Settings.canDrawOverlays(this)
+        return AccessibilityMonitorService.isAccessibilityEnabled(this)
     }
 
     private fun consumeStartPopStudyIntent(intent: Intent?) {

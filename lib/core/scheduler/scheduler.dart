@@ -1,17 +1,15 @@
 import '../../features/pop_study/pop_models.dart';
 
 /// SM-2ベースの間隔反復スケジューラ。
-/// 参考: https://super-memory.com/english/ol/sm2.htm
 class Sm2Scheduler {
   static const double minEaseFactor = 1.3;
   static const double defaultEaseFactor = 2.5;
 
-  /// 学習ステップ（分単位）。Ankiのlearning steps相当。
+  /// 学習ステップ（分単位）: 1回目の正解 → 10分後に再出題。
   static const List<int> learningStepsMinutes = [1, 10];
 
-  /// 卒業後の最初の間隔（日）
+  /// 卒業後の最初の間隔（日）: 正解×2 または 簡単×1 で卒業
   static const int graduatingIntervalDays = 1;
-  static const int easyIntervalDays = 4;
 
   /// カードに対してレビュー結果を適用し、更新後のカードを返す。
   static CardModel applyRating(
@@ -19,6 +17,15 @@ class Sm2Scheduler {
     ReviewRating rating, {
     DateTime? now,
   }) {
+    // もう一度 → 初期状態（newCard）に完全リセット
+    if (rating == ReviewRating.again) {
+      return card.copyWith(
+        state: CardState.newCard,
+        repetitions: 0,
+        intervalDays: 0,
+        dueAt: null,
+      );
+    }
     final reviewTime = now ?? DateTime.now();
     return switch (card.state) {
       CardState.newCard => _applyToNew(card, rating, reviewTime),
@@ -32,7 +39,6 @@ class Sm2Scheduler {
     ReviewRating rating,
     DateTime now,
   ) {
-    // 新規カードはlearningに移行
     return _applyToLearning(
       card.copyWith(state: CardState.learning, repetitions: 0),
       rating,
@@ -47,25 +53,20 @@ class Sm2Scheduler {
   ) {
     switch (rating) {
       case ReviewRating.again:
-        // 最初のステップに戻す
+        // 上位で処理済みのため到達しない
+        return card;
+      case ReviewRating.hard:
+        // 前のステップに戻す（タイミングを早める）
+        final step = learningStepsMinutes.first;
         return card.copyWith(
           state: CardState.learning,
           repetitions: 0,
-          dueAt: now.add(Duration(minutes: learningStepsMinutes.first)),
-        );
-      case ReviewRating.hard:
-        // 同じステップを繰り返す
-        final step = learningStepsMinutes[
-            card.repetitions.clamp(0, learningStepsMinutes.length - 1)];
-        return card.copyWith(
-          state: CardState.learning,
           dueAt: now.add(Duration(minutes: step)),
         );
       case ReviewRating.good:
-        // 次のステップへ or 卒業
+        // 次のステップへ or 卒業（正解×2で卒業）
         final nextStep = card.repetitions + 1;
         if (nextStep >= learningStepsMinutes.length) {
-          // 卒業してreviewへ
           return card.copyWith(
             state: CardState.review,
             repetitions: 0,
@@ -79,12 +80,12 @@ class Sm2Scheduler {
           dueAt: now.add(Duration(minutes: learningStepsMinutes[nextStep])),
         );
       case ReviewRating.easy:
-        // 即卒業
+        // 即卒業（1日後）
         return card.copyWith(
           state: CardState.review,
           repetitions: 0,
-          intervalDays: easyIntervalDays,
-          dueAt: now.add(const Duration(days: easyIntervalDays)),
+          intervalDays: graduatingIntervalDays,
+          dueAt: now.add(const Duration(days: graduatingIntervalDays)),
         );
     }
   }
@@ -96,19 +97,12 @@ class Sm2Scheduler {
   ) {
     switch (rating) {
       case ReviewRating.again:
-        // 忘れた → learningに戻す（lapse）
-        final newEase = (card.easeFactor - 0.2).clamp(minEaseFactor, 99.0);
-        return card.copyWith(
-          state: CardState.learning,
-          repetitions: 0,
-          easeFactor: newEase,
-          intervalDays: 0,
-          lapses: card.lapses + 1,
-          dueAt: now.add(Duration(minutes: learningStepsMinutes.first)),
-        );
+        // 上位で処理済みのため到達しない
+        return card;
       case ReviewRating.hard:
+        // インターバルを短縮（現在の75%、最低1日）
         final newEase = (card.easeFactor - 0.15).clamp(minEaseFactor, 99.0);
-        final newInterval = (card.intervalDays * 1.2).ceil().clamp(1, 36500);
+        final newInterval = (card.intervalDays * 0.75).ceil().clamp(1, 36500);
         return card.copyWith(
           intervalDays: newInterval,
           easeFactor: newEase,
@@ -148,13 +142,16 @@ class Sm2Scheduler {
     }
   }
 
-  /// 次回の間隔をプレビュー（UI表示用、カードは変更しない）
+  /// 次回の間隔をプレビュー（UI表示用）
   static Duration previewInterval(
     CardModel card,
     ReviewRating rating, {
     DateTime? now,
   }) {
     final reviewTime = now ?? DateTime.now();
+    if (rating == ReviewRating.again) {
+      return Duration.zero;
+    }
     final predicted = applyRating(card, rating, now: reviewTime);
     final due = predicted.dueAt;
     if (due == null) return Duration.zero;

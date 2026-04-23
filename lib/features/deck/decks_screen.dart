@@ -26,7 +26,7 @@ class DecksScreen extends ConsumerWidget {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final deck = decks[i];
-                final counts = countAll(deck.cards);
+                final counts = countDue(deck.cards, DateTime.now());
 
                 return ListTile(
                   leading: CircleAvatar(

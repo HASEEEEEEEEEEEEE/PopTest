@@ -8,19 +8,11 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
-import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.provider.Settings
-import android.view.Gravity
-import android.view.View
-import android.view.WindowManager
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
@@ -36,11 +28,11 @@ class UsageMonitorService : Service() {
     private var targetPackages: Set<String> = emptySet()
     private var popCount: Int = defaultPopCount
     private var targetDeckId: String? = null
-    private var popupIntervalSeconds: Int = defaultIntervalMinutes * 60
-    private var viewingSecondsForCurrentInterval: Int = 0
-    private var lastTrackingAtMs: Long? = null
+    private var popupIntervalMs: Long = defaultIntervalMinutes * 60_000L
+    private var viewingMsForCurrentInterval: Long = 0L
+    // elapsedRealtime ベース: 時刻変更・NTP同期の影響を受けない単調増加クロック
+    private var lastTrackingElapsedMs: Long? = null
     private var lastKnownPackageName: String? = null
-    private var overlayView: View? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -62,7 +54,6 @@ class UsageMonitorService : Service() {
 
     override fun onDestroy() {
         stopChecking()
-        dismissOverlay()
         BrowserUrlMonitorState.clear()
         super.onDestroy()
     }
@@ -93,18 +84,17 @@ class UsageMonitorService : Service() {
         val intervalMinutes = intent.getIntExtra(extraIntervalMinutes, defaultIntervalMinutes)
         popCount = intent.getIntExtra(extraPopCount, defaultPopCount).coerceIn(1, maxPopCount)
         targetDeckId = intent.getStringExtra(extraDeckId)?.trim()?.takeIf { it.isNotEmpty() }
-        popupIntervalSeconds = intervalMinutes.coerceAtLeast(1) * 60
+        popupIntervalMs = intervalMinutes.coerceAtLeast(1) * 60_000L
         lastKnownPackageName = null
-        viewingSecondsForCurrentInterval = 0
-        lastTrackingAtMs = null
-        dismissOverlay()
-        // Flutter side already computes effective URLs (including known-package patterns).
+        viewingMsForCurrentInterval = 0L
+        lastTrackingElapsedMs = null
         targetPackages = packageNames
         BrowserUrlMonitorState.updateTargets(customUrls)
     }
 
     private fun emitForegroundMatchEvent() {
-        val nowMs = System.currentTimeMillis()
+        val nowMs = System.currentTimeMillis()           // 壁時計: イベントタイムスタンプ用
+        val nowElapsed = SystemClock.elapsedRealtime()   // 単調増加: 経過時間計算用
         val detectedPackage = readForegroundPackageName()
 
         if (detectedPackage != null) {
@@ -113,7 +103,7 @@ class UsageMonitorService : Service() {
         val packageName = lastKnownPackageName
 
         if (packageName == applicationContext.packageName) {
-            lastTrackingAtMs = nowMs
+            lastTrackingElapsedMs = nowElapsed
             return
         }
 
@@ -127,8 +117,8 @@ class UsageMonitorService : Service() {
             "tracking | matched=$matchedTarget | pkg=$packageName | url=${currentUrl ?: "-"}",
         )
 
-        updateViewingSeconds(matchedTarget, nowMs)
-        maybeShowOverlay(nowMs)
+        updateViewingSeconds(matchedTarget, nowElapsed)
+        maybeStartPopStudy(nowMs)
         PopMonitoringEventBus.emit(
             mapOf(
                 "eventType" to eventTypeTracking,
@@ -141,127 +131,38 @@ class UsageMonitorService : Service() {
         )
     }
 
-    private fun updateViewingSeconds(matchedTarget: Boolean, nowMs: Long) {
-        val previous = lastTrackingAtMs
-        lastTrackingAtMs = nowMs
+    private fun updateViewingSeconds(matchedTarget: Boolean, nowElapsed: Long) {
+        val previous = lastTrackingElapsedMs
+        lastTrackingElapsedMs = nowElapsed
         if (!matchedTarget || previous == null) return
-        val rawElapsedSeconds = ((nowMs - previous).coerceAtLeast(0L) / 1000L).toInt()
-        val maxAllowedElapsedSeconds =
-            ((checkIntervalMs * maxElapsedMultiplier) / 1000L).toInt().coerceAtLeast(1)
-        val elapsedSeconds = rawElapsedSeconds.coerceAtMost(maxAllowedElapsedSeconds)
-        if (elapsedSeconds <= 0) return
-        viewingSecondsForCurrentInterval += elapsedSeconds
+        val rawElapsedMs = (nowElapsed - previous).coerceAtLeast(0L)
+        val maxAllowedMs = (checkIntervalMs * maxElapsedMultiplier).coerceAtLeast(1L)
+        val elapsedMs = rawElapsedMs.coerceAtMost(maxAllowedMs)
+        if (elapsedMs <= 0L) return
+        viewingMsForCurrentInterval += elapsedMs
     }
 
-    private fun maybeShowOverlay(nowMs: Long) {
-        if (overlayView != null) return
-        if (targetDeckId.isNullOrBlank()) return
-        if (viewingSecondsForCurrentInterval < popupIntervalSeconds) return
-        if (!Settings.canDrawOverlays(this)) return
-        viewingSecondsForCurrentInterval = 0
-        showOverlay(targetDeckId!!, popCount)
+    private fun maybeStartPopStudy(nowMs: Long) {
+        val deckId = targetDeckId ?: return
+        if (deckId.isBlank()) return
+        if (viewingMsForCurrentInterval < popupIntervalMs) return
+        viewingMsForCurrentInterval = 0L
         PopMonitoringEventBus.emit(
             mapOf(
                 "eventType" to eventTypePopupShown,
                 "matchedTarget" to true,
                 "timestampMs" to nowMs,
-                "deckId" to targetDeckId,
+                "deckId" to deckId,
             ),
         )
-    }
-
-    private fun showOverlay(deckId: String, popCount: Int) {
-        if (overlayView != null) return
-        val windowManager = getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 40, 48, 32)
-            setBackgroundColor(Color.argb(242, 33, 33, 33))
-            elevation = 18f
+        val launchIntent = Intent(this, MainActivity::class.java).apply {
+            action = actionStartPopStudy
+            putExtra(extraDeckId, deckId)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        val title = TextView(this).apply {
-            text = "ポップ学習"
-            setTextColor(Color.WHITE)
-            textSize = 19f
-            setPadding(0, 0, 0, 12)
-        }
-        val message = TextView(this).apply {
-            text = "学習のタイミングです。${popCount}問の学習を開始します。"
-            setTextColor(Color.WHITE)
-            textSize = 15f
-            setPadding(0, 0, 0, 20)
-        }
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END
-        }
-        val snoozeButton = Button(this).apply {
-            text = "後で"
-            setOnClickListener {
-                dismissOverlay()
-                PopMonitoringEventBus.emit(
-                    mapOf(
-                        "eventType" to eventTypePopupSnooze,
-                        "matchedTarget" to false,
-                        "timestampMs" to System.currentTimeMillis(),
-                    ),
-                )
-            }
-        }
-        val startButton = Button(this).apply {
-            text = "開始"
-            setOnClickListener {
-                dismissOverlay()
-                PopMonitoringEventBus.emit(
-                    mapOf(
-                        "eventType" to eventTypePopupStart,
-                        "matchedTarget" to false,
-                        "timestampMs" to System.currentTimeMillis(),
-                        "deckId" to deckId,
-                    ),
-                )
-                val launchIntent =
-                    Intent(this@UsageMonitorService, MainActivity::class.java).apply {
-                        action = actionStartPopStudy
-                        putExtra(extraDeckId, deckId)
-                        flags =
-                            Intent.FLAG_ACTIVITY_NEW_TASK or
-                                Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                                Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    }
-                startActivity(launchIntent)
-            }
-        }
-        actions.addView(snoozeButton)
-        actions.addView(startButton)
-        container.addView(title)
-        container.addView(message)
-        container.addView(actions)
-        val layoutParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            },
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = 120
-        }
-        windowManager.addView(container, layoutParams)
-        overlayView = container
-    }
-
-    private fun dismissOverlay() {
-        val view = overlayView ?: return
-        val windowManager = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-        runCatching { windowManager?.removeView(view) }
-        overlayView = null
+        startActivity(launchIntent)
     }
 
     private fun readForegroundPackageName(): String? {
@@ -273,7 +174,6 @@ class UsageMonitorService : Service() {
         val events = usageStats.queryEvents(begin, end)
         val event = UsageEvents.Event()
 
-        // パッケージごとの「最新のRESUMED/PAUSEDタイムスタンプ」を記録
         data class PkgState(var resumedAt: Long, var pausedAt: Long)
         val states = mutableMapOf<String, PkgState>()
 
@@ -291,22 +191,10 @@ class UsageMonitorService : Service() {
             }
         }
 
-        // resumedAt > pausedAt のパッケージが「今アクティブ」
-        // 複数あれば resumedAt が最新のものを選ぶ
         return states.entries
             .filter { it.value.resumedAt > it.value.pausedAt }
             .maxByOrNull { it.value.resumedAt }
             ?.key
-    }        
-        
- 
-    private fun isForegroundEvent(event: UsageEvents.Event): Boolean {
-        return when (event.eventType) {
-            UsageEvents.Event.MOVE_TO_FOREGROUND -> true
-            UsageEvents.Event.ACTIVITY_RESUMED ->
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-            else -> false
-        }
     }
 
     private fun buildNotification(): Notification {
@@ -361,8 +249,6 @@ class UsageMonitorService : Service() {
 
         private const val eventTypeTracking = "tracking"
         private const val eventTypePopupShown = "popupShown"
-        private const val eventTypePopupSnooze = "popupSnooze"
-        private const val eventTypePopupStart = "popupStart"
 
         fun start(
             context: Context,
@@ -389,18 +275,38 @@ class UsageMonitorService : Service() {
         }
 
         fun isUsageAccessGranted(context: Context): Boolean {
-            val usageStats =
-                context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-                    ?: return false
-            val end = System.currentTimeMillis()
-            val begin = end - 60_000L
-            val stats = usageStats.queryUsageStats(
-                UsageStatsManager.INTERVAL_DAILY,
-                begin,
-                end,
-            )
-            return !stats.isNullOrEmpty()
+            try {
+                val appOps = context.getSystemService(Context.APP_OPS_SERVICE)
+                    as? android.app.AppOpsManager
+                if (appOps != null) {
+                    val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        appOps.unsafeCheckOpNoThrow(
+                            android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                            android.os.Process.myUid(),
+                            context.packageName,
+                        )
+                    } else {
+                        @Suppress("DEPRECATION")
+                        appOps.checkOpNoThrow(
+                            android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                            android.os.Process.myUid(),
+                            context.packageName,
+                        )
+                    }
+                    if (mode == android.app.AppOpsManager.MODE_ALLOWED) return true
+                }
+            } catch (_: Exception) {}
+            return try {
+                val usageStats = context.getSystemService(Context.USAGE_STATS_SERVICE)
+                    as? UsageStatsManager ?: return false
+                val end = System.currentTimeMillis()
+                val stats = usageStats.queryUsageStats(
+                    UsageStatsManager.INTERVAL_DAILY,
+                    end - 7 * 24 * 60 * 60 * 1000L,
+                    end,
+                )
+                !stats.isNullOrEmpty()
+            } catch (_: Exception) { false }
         }
-
     }
 }
