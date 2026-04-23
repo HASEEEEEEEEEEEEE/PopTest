@@ -82,6 +82,8 @@ class AppPrefs {
   static const _prefixDeckPopCount = 'deck_pop_count_';
   static const _prefixDeckName = 'deck_name_';
   static const _prefixDeckCards = 'deck_cards_';
+  static const _keyCustomDeckIds = 'custom_deck_ids';
+  static const _keyDeletedDefaultDeckIds = 'deleted_default_deck_ids';
 
   // Maps old service names → package names for one-time migration.
   static const _legacyServicePackages = {
@@ -235,6 +237,47 @@ class AppPrefs {
   String? getDeckName(String deckId) =>
       _prefs.getString('$_prefixDeckName$deckId');
 
+  // ── Deck ID registry ──────────────────────────────────────────────────────
+
+  List<String> getCustomDeckIds() =>
+      _prefs.getStringList(_keyCustomDeckIds) ?? const [];
+
+  Future<void> setCustomDeckIds(List<String> ids) async {
+    if (ids.isEmpty) {
+      await _prefs.remove(_keyCustomDeckIds);
+    } else {
+      await _prefs.setStringList(_keyCustomDeckIds, ids);
+    }
+  }
+
+  Set<String> getDeletedDefaultDeckIds() =>
+      (_prefs.getStringList(_keyDeletedDefaultDeckIds) ?? const []).toSet();
+
+  Future<void> setDeletedDefaultDeckIds(Set<String> ids) async {
+    if (ids.isEmpty) {
+      await _prefs.remove(_keyDeletedDefaultDeckIds);
+    } else {
+      await _prefs.setStringList(_keyDeletedDefaultDeckIds, ids.toList());
+    }
+  }
+
+  Future<void> removeDeckData(String deckId) async {
+    await _prefs.remove('$_prefixDeckName$deckId');
+    await _prefs.remove('$_prefixDeckCards$deckId');
+    await _prefs.remove('$_prefixDeckPopUseGlobal$deckId');
+    await _prefs.remove('$_prefixDeckPopPackageNames$deckId');
+    await _prefs.remove('$_prefixDeckPopCustomUrls$deckId');
+    await _prefs.remove('$_prefixDeckPopIntervalMinutes$deckId');
+    await _prefs.remove('$_prefixDeckPopCount$deckId');
+    final cardStateKeys = _prefs
+        .getKeys()
+        .where((k) => k.startsWith('$_prefixCardState${deckId}_'))
+        .toList();
+    for (final key in cardStateKeys) {
+      await _prefs.remove(key);
+    }
+  }
+
   Future<void> setDeckCards(String deckId, List<CardModel> cards) async {
     final rows = cards
         .map((c) => jsonEncode({
@@ -247,6 +290,14 @@ class AppPrefs {
               'easeFactor': c.easeFactor,
               'repetitions': c.repetitions,
               'lapses': c.lapses,
+              if (c.frontMedia.imageUrl != null)
+                'frontImageUrl': c.frontMedia.imageUrl,
+              if (c.frontMedia.audioUrl != null)
+                'frontAudioUrl': c.frontMedia.audioUrl,
+              if (c.backMedia.imageUrl != null)
+                'backImageUrl': c.backMedia.imageUrl,
+              if (c.backMedia.audioUrl != null)
+                'backAudioUrl': c.backMedia.audioUrl,
             }))
         .toList();
     await _prefs.setStringList('$_prefixDeckCards$deckId', rows);
@@ -290,6 +341,14 @@ class AppPrefs {
         easeFactor: (cardData['easeFactor'] as num?)?.toDouble() ?? 2.5,
         repetitions: (cardData['repetitions'] as num?)?.toInt() ?? 0,
         lapses: (cardData['lapses'] as num?)?.toInt() ?? 0,
+        frontMedia: CardMedia(
+          imageUrl: cardData['frontImageUrl'] as String?,
+          audioUrl: cardData['frontAudioUrl'] as String?,
+        ),
+        backMedia: CardMedia(
+          imageUrl: cardData['backImageUrl'] as String?,
+          audioUrl: cardData['backAudioUrl'] as String?,
+        ),
       ));
     }
     return cards;

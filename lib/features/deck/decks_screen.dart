@@ -10,14 +10,75 @@ import '../pop_study/pop_repository.dart';
 class DecksScreen extends ConsumerWidget {
   const DecksScreen({super.key});
 
+  Future<void> _showCreateDeckDialog(
+      BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('新規デッキ作成'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'デッキ名'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('作成'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    final deckId =
+        await ref.read(deckRepositoryProvider.notifier).addDeck(name);
+    if (deckId.isEmpty || !context.mounted) return;
+    context.go('${AppRoutes.decks}/$deckId/edit');
+  }
+
+  Future<void> _confirmDeleteDeck(
+      BuildContext context, WidgetRef ref, String deckId, String name) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('デッキ削除'),
+        content: Text('「$name」を削除しますか？\nこの操作は取り消せません。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('削除'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ref.read(deckRepositoryProvider.notifier).deleteDeck(deckId);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch the state map directly – rebuilds when card states change.
     final deckMap = ref.watch(deckRepositoryProvider);
     final decks = deckMap.values.toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('デッキ一覧')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showCreateDeckDialog(context, ref),
+        icon: const Icon(Icons.add),
+        label: const Text('新規デッキ'),
+      ),
       body: decks.isEmpty
           ? const Center(child: Text('デッキがありません'))
           : ListView.separated(
@@ -49,7 +110,23 @@ class DecksScreen extends ConsumerWidget {
                     ],
                   ),
                   isThreeLine: true,
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'open':
+                          context.go('${AppRoutes.decks}/${deck.deckId}');
+                          break;
+                        case 'delete':
+                          _confirmDeleteDeck(
+                              context, ref, deck.deckId, deck.name);
+                          break;
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'open', child: Text('開く')),
+                      PopupMenuItem(value: 'delete', child: Text('削除')),
+                    ],
+                  ),
                   onTap: () =>
                       context.go('${AppRoutes.decks}/${deck.deckId}'),
                 );

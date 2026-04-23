@@ -40,11 +40,12 @@ class DeckData {
 ///
 /// TODO: replace with Drift database in issue #2.
 class DeckRepository extends Notifier<Map<String, DeckData>> {
+  static const _defaultDeckIds = {'1', '2'};
+
   @override
   Map<String, DeckData> build() {
     final prefs = ref.read(appPrefsProvider);
     final initial = _initialDecks(prefs);
-    // Overlay persisted card states on top of the hard-coded defaults.
     return {
       for (final entry in initial.entries)
         entry.key: _applyPersistedStates(entry.value, prefs),
@@ -80,6 +81,34 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
     final updated = deck.copyWith(name: newName.trim());
     state = Map.of(state)..[deckId] = updated;
     await ref.read(appPrefsProvider).setDeckName(deckId, updated.name);
+  }
+
+  /// Creates a new empty deck and persists it. Returns the new deck's ID.
+  Future<String> addDeck(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '';
+    final prefs = ref.read(appPrefsProvider);
+    final deckId = 'deck-${DateTime.now().millisecondsSinceEpoch}';
+    final newDeck = DeckData(deckId: deckId, name: trimmed, cards: const []);
+    state = Map.of(state)..[deckId] = newDeck;
+    final customIds = [...prefs.getCustomDeckIds(), deckId];
+    await prefs.setCustomDeckIds(customIds);
+    await prefs.setDeckName(deckId, trimmed);
+    await prefs.setDeckCards(deckId, const []);
+    return deckId;
+  }
+
+  Future<void> deleteDeck(String deckId) async {
+    if (!state.containsKey(deckId)) return;
+    final prefs = ref.read(appPrefsProvider);
+    state = Map.of(state)..remove(deckId);
+    final customIds = prefs.getCustomDeckIds().where((id) => id != deckId).toList();
+    await prefs.setCustomDeckIds(customIds);
+    if (_defaultDeckIds.contains(deckId)) {
+      final deleted = prefs.getDeletedDefaultDeckIds()..add(deckId);
+      await prefs.setDeletedDefaultDeckIds(deleted);
+    }
+    await prefs.removeDeckData(deckId);
   }
 
   Future<void> addCard(String deckId, String front, String back) async {
@@ -230,14 +259,24 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
         ],
       ),
     };
-    return {
+    final deletedDefaults = prefs.getDeletedDefaultDeckIds();
+    final result = <String, DeckData>{
       for (final entry in defaults.entries)
-        entry.key: DeckData(
-          deckId: entry.value.deckId,
-          name: prefs.getDeckName(entry.key) ?? entry.value.name,
-          cards: prefs.getDeckCards(entry.key) ?? entry.value.cards,
-        ),
+        if (!deletedDefaults.contains(entry.key))
+          entry.key: DeckData(
+            deckId: entry.value.deckId,
+            name: prefs.getDeckName(entry.key) ?? entry.value.name,
+            cards: prefs.getDeckCards(entry.key) ?? entry.value.cards,
+          ),
     };
+    for (final id in prefs.getCustomDeckIds()) {
+      result[id] = DeckData(
+        deckId: id,
+        name: prefs.getDeckName(id) ?? '新しいデッキ',
+        cards: prefs.getDeckCards(id) ?? const [],
+      );
+    }
+    return result;
   }
 }
 

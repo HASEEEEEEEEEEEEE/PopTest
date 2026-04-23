@@ -125,6 +125,31 @@ class DeckPopSettings {
   }
 }
 
+/// Media (image + audio) attached to one side of a card.
+/// URLs may be local file paths (Phase 1) or Firebase Storage URLs (Phase 2).
+class CardMedia {
+  const CardMedia({this.imageUrl, this.audioUrl});
+
+  final String? imageUrl;
+  final String? audioUrl;
+
+  bool get hasImage => imageUrl != null && imageUrl!.isNotEmpty;
+  bool get hasAudio => audioUrl != null && audioUrl!.isNotEmpty;
+  bool get isEmpty => !hasImage && !hasAudio;
+
+  CardMedia copyWith({
+    String? imageUrl,
+    String? audioUrl,
+    bool clearImage = false,
+    bool clearAudio = false,
+  }) {
+    return CardMedia(
+      imageUrl: clearImage ? null : (imageUrl ?? this.imageUrl),
+      audioUrl: clearAudio ? null : (audioUrl ?? this.audioUrl),
+    );
+  }
+}
+
 /// Card model with SM-2 spaced-repetition fields.
 class CardModel {
   const CardModel({
@@ -137,6 +162,8 @@ class CardModel {
     this.easeFactor = 2.5,
     this.repetitions = 0,
     this.lapses = 0,
+    this.frontMedia = const CardMedia(),
+    this.backMedia = const CardMedia(),
   });
 
   final String id;
@@ -148,6 +175,8 @@ class CardModel {
   final double easeFactor;
   final int repetitions;
   final int lapses;
+  final CardMedia frontMedia;
+  final CardMedia backMedia;
 
   CardModel copyWith({
     String? id,
@@ -159,6 +188,8 @@ class CardModel {
     double? easeFactor,
     int? repetitions,
     int? lapses,
+    CardMedia? frontMedia,
+    CardMedia? backMedia,
     bool clearDueAt = false,
   }) {
     return CardModel(
@@ -171,6 +202,8 @@ class CardModel {
       easeFactor: easeFactor ?? this.easeFactor,
       repetitions: repetitions ?? this.repetitions,
       lapses: lapses ?? this.lapses,
+      frontMedia: frontMedia ?? this.frontMedia,
+      backMedia: backMedia ?? this.backMedia,
     );
   }
 }
