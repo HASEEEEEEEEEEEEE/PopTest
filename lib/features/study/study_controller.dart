@@ -122,6 +122,18 @@ class StudyController extends AutoDisposeFamilyNotifier<StudyState, String> {
   void refresh() {
     state = _buildNext();
   }
+
+  /// Re-fetches the current card from the repository, preserving session state.
+  /// Use after the user edits the card mid-session.
+  void syncCurrentCardFromRepo() {
+    final current = state.currentCard;
+    if (current == null) return;
+    final repo = ref.read(deckRepositoryProvider.notifier);
+    final fresh =
+        repo.getDeck(arg).cards.firstWhere((c) => c.id == current.id,
+            orElse: () => current);
+    state = state.copyWith(currentCard: fresh);
+  }
 }
 
 final studyProvider = NotifierProvider.autoDispose

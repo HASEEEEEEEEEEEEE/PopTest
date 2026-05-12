@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/deck/card_editor_screen.dart';
+import '../features/deck/deck_import_screen.dart';
 import '../features/deck/deck_screen.dart';
 import '../features/deck/decks_screen.dart';
 import '../features/deck/deck_edit_screen.dart';
@@ -84,6 +86,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) => const DecksScreen(),
                 routes: [
                   GoRoute(
+                    path: 'import',
+                    builder: (context, state) => const DeckImportScreen(),
+                  ),
+                  GoRoute(
                     path: ':deckId',
                     builder: (context, state) {
                       final deckId = state.pathParameters['deckId']!;
@@ -103,6 +109,27 @@ final routerProvider = Provider<GoRouter>((ref) {
                           final deckId = state.pathParameters['deckId']!;
                           return DeckEditScreen(deckId: deckId);
                         },
+                        routes: [
+                          GoRoute(
+                            path: 'card/new',
+                            builder: (context, state) {
+                              final deckId =
+                                  state.pathParameters['deckId']!;
+                              return CardEditorScreen(deckId: deckId);
+                            },
+                          ),
+                          GoRoute(
+                            path: 'card/:cardId',
+                            builder: (context, state) {
+                              final deckId =
+                                  state.pathParameters['deckId']!;
+                              final cardId =
+                                  state.pathParameters['cardId']!;
+                              return CardEditorScreen(
+                                  deckId: deckId, cardId: cardId);
+                            },
+                          ),
+                        ],
                       ),
                       GoRoute(
                         path: 'pop',

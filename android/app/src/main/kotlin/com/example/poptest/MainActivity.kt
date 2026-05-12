@@ -144,35 +144,38 @@ class MainActivity : FlutterActivity() {
             }
 
             "getInstalledApps" -> {
-                try {
-                    val pm = packageManager
-                    val appList = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-                    val resultList = appList.mapNotNull { appInfo ->
-                        // Only include apps that have a launcher entry (user-visible apps).
-                        val hasLauncher =
-                            pm.getLaunchIntentForPackage(appInfo.packageName) != null
-                        if (!hasLauncher) return@mapNotNull null
-                        val label = pm.getApplicationLabel(appInfo).toString()
-                        val iconBase64 = try {
-                            val drawable = pm.getApplicationIcon(appInfo.packageName)
-                            val bmp = drawableToBitmap(drawable)
-                            val baos = ByteArrayOutputStream()
-                            bmp.compress(Bitmap.CompressFormat.PNG, 85, baos)
-                            bmp.recycle()
-                            Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
-                        } catch (_: Exception) {
-                            null
-                        }
-                        mapOf(
-                            "packageName" to appInfo.packageName,
-                            "label" to label,
-                            "icon" to iconBase64,
-                        )
-                    }.sortedBy { it["label"] as String }
-                    result.success(resultList)
-                } catch (e: Exception) {
-                    result.error("GET_APPS_ERROR", e.message, null)
-                }
+                // Heavy work (package query + icon rendering) runs on a background thread
+                // so the UI thread stays responsive.
+                Thread {
+                    try {
+                        val pm = packageManager
+                        val appList = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                        val resultList = appList.mapNotNull { appInfo ->
+                            val hasLauncher =
+                                pm.getLaunchIntentForPackage(appInfo.packageName) != null
+                            if (!hasLauncher) return@mapNotNull null
+                            val label = pm.getApplicationLabel(appInfo).toString()
+                            val iconBase64 = try {
+                                val drawable = pm.getApplicationIcon(appInfo.packageName)
+                                val bmp = drawableToBitmap(drawable)
+                                val baos = ByteArrayOutputStream()
+                                bmp.compress(Bitmap.CompressFormat.PNG, 85, baos)
+                                bmp.recycle()
+                                Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+                            } catch (_: Exception) {
+                                null
+                            }
+                            mapOf(
+                                "packageName" to appInfo.packageName,
+                                "label" to label,
+                                "icon" to iconBase64,
+                            )
+                        }.sortedBy { it["label"] as String }
+                        runOnUiThread { result.success(resultList) }
+                    } catch (e: Exception) {
+                        runOnUiThread { result.error("GET_APPS_ERROR", e.message, null) }
+                    }
+                }.start()
             }
 
             else -> result.notImplemented()

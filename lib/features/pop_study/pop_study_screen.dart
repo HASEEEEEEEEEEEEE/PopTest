@@ -13,6 +13,7 @@ import '../home/selected_deck_provider.dart';
 import '../../core/scheduler/scheduler.dart';
 import '../../routing/router.dart' show AppRoutes;
 import '../pop_study/pop_repository.dart';
+import '../study/card_face.dart';
 
 class PopStudyScreen extends ConsumerStatefulWidget {
   const PopStudyScreen({super.key, required this.deckId});
@@ -244,7 +245,19 @@ class _PopStudyScreenState extends ConsumerState<PopStudyScreen> {
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
-                Expanded(child: _CardFace(state: state, card: current)),
+                Expanded(
+                  child: CardFace(
+                    card: current,
+                    showBack: state.showBack,
+                    onEdit: () async {
+                      await context.push(
+                          '${AppRoutes.decks}/${widget.deckId}/edit/card/${current.id}');
+                      ref
+                          .read(popStudyProvider(widget.deckId).notifier)
+                          .syncCurrentCardFromRepo();
+                    },
+                  ),
+                ),
                 const SizedBox(height: 16),
                 if (!state.showBack)
                   SizedBox(
@@ -353,46 +366,6 @@ class _CountChip extends StatelessWidget {
         color: effectiveColor,
         decorationColor: highlight ? theme.colorScheme.primary : null,
         decorationThickness: highlight ? 2 : null,
-      ),
-    );
-  }
-}
-
-class _CardFace extends StatelessWidget {
-  const _CardFace({required this.state, required this.card});
-
-  final PopStudyState state;
-  final CardModel card;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 4,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                card.front,
-                style: theme.textTheme.headlineMedium,
-                textAlign: TextAlign.center,
-              ),
-              if (state.showBack) ...[
-                const Divider(height: 32),
-                Text(
-                  card.back,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ],
-          ),
-        ),
       ),
     );
   }

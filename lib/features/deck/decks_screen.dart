@@ -10,8 +10,39 @@ import '../pop_study/pop_repository.dart';
 class DecksScreen extends ConsumerWidget {
   const DecksScreen({super.key});
 
-  Future<void> _showCreateDeckDialog(
+  Future<void> _showAddDeckSheet(
       BuildContext context, WidgetRef ref) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.add),
+              title: const Text('空のデッキを作成'),
+              subtitle: const Text('カードを1枚ずつ手で追加'),
+              onTap: () => Navigator.pop(ctx, 'create'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.file_upload_outlined),
+              title: const Text('ファイルからインポート'),
+              subtitle: const Text('.txt / .csv / .tsv'),
+              onTap: () => Navigator.pop(ctx, 'import'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+    if (choice == 'import') {
+      context.go('${AppRoutes.decks}/import');
+    } else {
+      await _promptDeckName(context, ref);
+    }
+  }
+
+  Future<void> _promptDeckName(BuildContext context, WidgetRef ref) async {
     final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
@@ -36,8 +67,7 @@ class DecksScreen extends ConsumerWidget {
       ),
     );
     if (name == null || name.isEmpty) return;
-    final deckId =
-        await ref.read(deckRepositoryProvider.notifier).addDeck(name);
+    final deckId = ref.read(deckRepositoryProvider.notifier).addDeck(name);
     if (deckId.isEmpty || !context.mounted) return;
     context.go('${AppRoutes.decks}/$deckId/edit');
   }
@@ -75,7 +105,7 @@ class DecksScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('デッキ一覧')),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateDeckDialog(context, ref),
+        onPressed: () => _showAddDeckSheet(context, ref),
         icon: const Icon(Icons.add),
         label: const Text('新規デッキ'),
       ),

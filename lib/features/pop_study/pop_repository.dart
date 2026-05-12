@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/local/app_prefs.dart';
+import '../../services/media_storage.dart';
 import 'pop_models.dart';
 
 /// A single deck with its cards.
@@ -83,8 +84,10 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
     await ref.read(appPrefsProvider).setDeckName(deckId, updated.name);
   }
 
-  /// Creates a new empty deck and persists it. Returns the new deck's ID.
-  Future<String> addDeck(String name) async {
+  /// Creates a new empty deck. Returns the new deck's ID immediately;
+  /// persistence happens in the background so the UI doesn't wait on three
+  /// sequential SharedPreferences writes.
+  String addDeck(String name) {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return '';
     final prefs = ref.read(appPrefsProvider);
@@ -92,9 +95,11 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
     final newDeck = DeckData(deckId: deckId, name: trimmed, cards: const []);
     state = Map.of(state)..[deckId] = newDeck;
     final customIds = [...prefs.getCustomDeckIds(), deckId];
-    await prefs.setCustomDeckIds(customIds);
-    await prefs.setDeckName(deckId, trimmed);
-    await prefs.setDeckCards(deckId, const []);
+    Future.wait([
+      prefs.setCustomDeckIds(customIds),
+      prefs.setDeckName(deckId, trimmed),
+      prefs.setDeckCards(deckId, const []),
+    ]);
     return deckId;
   }
 
@@ -109,21 +114,92 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
       await prefs.setDeletedDefaultDeckIds(deleted);
     }
     await prefs.removeDeckData(deckId);
+    await ref.read(mediaStorageProvider).deleteDeckDirectory(deckId);
   }
 
   Future<void> addCard(String deckId, String front, String back) async {
+    await addCardWithMedia(
+      deckId: deckId,
+      front: front,
+      back: back,
+    );
+  }
+
+  Future<String?> addCardWithMedia({
+    required String deckId,
+    required String front,
+    required String back,
+    CardMedia frontMedia = const CardMedia(),
+    CardMedia backMedia = const CardMedia(),
+  }) async {
     final deck = state[deckId];
-    if (deck == null) return;
+    if (deck == null) return null;
     final next = _maxCustomCardNumber(deck.cards) + 1;
+    final cardId = '$deckId-custom-$next';
     final newCard = CardModel(
-      id: '$deckId-custom-$next',
+      id: cardId,
       front: front.trim(),
       back: back.trim(),
       state: CardState.newCard,
+      frontMedia: frontMedia,
+      backMedia: backMedia,
     );
     final cards = [...deck.cards, newCard];
     state = Map.of(state)..[deckId] = deck.copyWith(cards: cards);
     await ref.read(appPrefsProvider).setDeckCards(deckId, cards);
+    return cardId;
+  }
+
+  Future<void> updateCardWithMedia({
+    required String deckId,
+    required String cardId,
+    required String front,
+    required String back,
+    required CardMedia frontMedia,
+    required CardMedia backMedia,
+  }) async {
+    final deck = state[deckId];
+    if (deck == null) return;
+    final cards = deck.cards
+        .map((c) => c.id == cardId
+            ? c.copyWith(
+                front: front.trim(),
+                back: back.trim(),
+                frontMedia: frontMedia,
+                backMedia: backMedia,
+              )
+            : c)
+        .toList();
+    state = Map.of(state)..[deckId] = deck.copyWith(cards: cards);
+    await ref.read(appPrefsProvider).setDeckCards(deckId, cards);
+  }
+
+  /// Bulk-adds cards to [deckId] in one persistence call.
+  /// Returns the number of cards actually appended.
+  Future<int> addCardsBulk(
+    String deckId,
+    Iterable<({String front, String back})> entries,
+  ) async {
+    final deck = state[deckId];
+    if (deck == null) return 0;
+    var nextNumber = _maxCustomCardNumber(deck.cards) + 1;
+    final newCards = <CardModel>[];
+    for (final e in entries) {
+      final front = e.front.trim();
+      final back = e.back.trim();
+      if (front.isEmpty || back.isEmpty) continue;
+      newCards.add(CardModel(
+        id: '$deckId-custom-${nextNumber++}',
+        front: front,
+        back: back,
+        state: CardState.newCard,
+      ));
+    }
+    if (newCards.isEmpty) return 0;
+    final cards = [...deck.cards, ...newCards];
+    state = Map.of(state)..[deckId] = deck.copyWith(cards: cards);
+    await ref.read(appPrefsProvider).setDeckCards(deckId, cards);
+    return newCards.length;
   }
 
   int _maxCustomCardNumber(List<CardModel> cards) {
@@ -173,9 +249,17 @@ class DeckRepository extends Notifier<Map<String, DeckData>> {
   Future<void> deleteCard(String deckId, String cardId) async {
     final deck = state[deckId];
     if (deck == null) return;
+    final removed = deck.cards.where((c) => c.id == cardId);
     final cards = deck.cards.where((c) => c.id != cardId).toList();
     state = Map.of(state)..[deckId] = deck.copyWith(cards: cards);
     await ref.read(appPrefsProvider).setDeckCards(deckId, cards);
+    final storage = ref.read(mediaStorageProvider);
+    for (final c in removed) {
+      await storage.deleteMedia(c.frontMedia.imageUrl);
+      await storage.deleteMedia(c.frontMedia.audioUrl);
+      await storage.deleteMedia(c.backMedia.imageUrl);
+      await storage.deleteMedia(c.backMedia.audioUrl);
+    }
   }
 
   Future<void> resetCardState(String deckId, String cardId) async {

@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/scheduler/scheduler.dart';
+import '../../routing/router.dart';
 import '../pop_study/pop_models.dart';
+import 'card_face.dart';
 import 'study_controller.dart';
 
 class StudyScreen extends ConsumerWidget {
@@ -80,7 +82,19 @@ class StudyScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
-                Expanded(child: _CardFace(card: card, showBack: state.showBack)),
+                Expanded(
+                  child: CardFace(
+                    card: card,
+                    showBack: state.showBack,
+                    onEdit: () async {
+                      await context.push(
+                          '${AppRoutes.decks}/$deckId/edit/card/${card.id}');
+                      ref
+                          .read(studyProvider(deckId).notifier)
+                          .syncCurrentCardFromRepo();
+                    },
+                  ),
+                ),
                 const SizedBox(height: 16),
                 if (!state.showBack)
                   SizedBox(
@@ -142,44 +156,6 @@ class _CountsBar extends StatelessWidget {
         ),
         Text(label, style: theme.textTheme.bodySmall),
       ],
-    );
-  }
-}
-
-class _CardFace extends StatelessWidget {
-  const _CardFace({required this.card, required this.showBack});
-
-  final CardModel card;
-  final bool showBack;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 4,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(card.front,
-                  style: theme.textTheme.headlineMedium,
-                  textAlign: TextAlign.center),
-              if (showBack) ...[
-                const Divider(height: 32),
-                Text(
-                  card.back,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../routing/router.dart';
 import '../pop_study/pop_models.dart';
 import '../pop_study/pop_repository.dart';
 
@@ -9,54 +11,10 @@ class DeckEditScreen extends ConsumerWidget {
 
   final String deckId;
 
-  Future<void> _showCardEditor(
-    BuildContext context,
-    WidgetRef ref, {
-    CardModel? card,
-  }) async {
-    final frontController = TextEditingController(text: card?.front ?? '');
-    final backController = TextEditingController(text: card?.back ?? '');
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(card == null ? 'カード追加' : 'カード編集'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: frontController,
-              decoration: const InputDecoration(labelText: '表面'),
-            ),
-            TextField(
-              controller: backController,
-              decoration: const InputDecoration(labelText: '裏面'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('キャンセル'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    if (result != true) return;
-    final repo = ref.read(deckRepositoryProvider.notifier);
-    if (card == null) {
-      await repo.addCard(deckId, frontController.text, backController.text);
-    } else {
-      await repo.updateCard(
-        deckId,
-        card.id,
-        front: frontController.text,
-        back: backController.text,
-      );
-    }
+  void _openCardEditor(BuildContext context, {CardModel? card}) {
+    final base = '${AppRoutes.decks}/$deckId/edit';
+    final target = card == null ? '$base/card/new' : '$base/card/${card.id}';
+    context.go(target);
   }
 
   Future<void> _showRenameDialog(
@@ -111,7 +69,7 @@ class DeckEditScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCardEditor(context, ref),
+        onPressed: () => _openCardEditor(context),
         child: const Icon(Icons.add),
       ),
       body: ListView(
@@ -136,7 +94,7 @@ class DeckEditScreen extends ConsumerWidget {
                       final repo = ref.read(deckRepositoryProvider.notifier);
                       switch (value) {
                         case 'edit':
-                          await _showCardEditor(context, ref, card: card);
+                          _openCardEditor(context, card: card);
                           break;
                         case 'reset':
                           await repo.resetCardState(deckId, card.id);

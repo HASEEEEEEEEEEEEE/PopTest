@@ -45,17 +45,21 @@ class PopMetricsNotifier extends Notifier<PopMetrics> {
     required bool matchedTarget,
     required DateTime at,
   }) async {
+    // Tracking events fire every second while monitoring. We update in-memory
+    // state for live UI (countdown, viewing time) but skip the SharedPreferences
+    // write on every tick — that I/O caused visible jank. Counters get persisted
+    // on session start/stop and on popup events (recordPopupShown etc).
     final since = state.lastTrackedAt ?? state.sessionStartedAt;
     final elapsed = since == null ? 0 : max(0, at.difference(since).inSeconds);
     final increment = matchedTarget && elapsed > 0 ? elapsed : 0;
-    await _persist(state.copyWith(
+    state = state.copyWith(
       trackedEventCount: state.trackedEventCount + 1,
       matchedEventCount: state.matchedEventCount + (matchedTarget ? 1 : 0),
       matchedActiveSeconds: state.matchedActiveSeconds + increment,
       viewingSecondsForCurrentInterval:
           state.viewingSecondsForCurrentInterval + increment,
       lastTrackedAt: at,
-    ));
+    );
   }
 
   Future<void> recordPopupStart(DateTime at) async {

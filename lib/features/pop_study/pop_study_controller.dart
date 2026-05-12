@@ -184,6 +184,22 @@ class PopStudyController
 
   void again() => rate(ReviewRating.again);
   void good() => rate(ReviewRating.good);
+
+  /// Re-fetches the current card from the repository, preserving the queue
+  /// and answered count. Use after the user edits the card mid-session.
+  void syncCurrentCardFromRepo() {
+    if (state.queue.isEmpty) return;
+    final current = state.queue.first;
+    final repo = ref.read(deckRepositoryProvider.notifier);
+    final fresh = repo
+        .getDeck(arg)
+        .cards
+        .firstWhere((c) => c.id == current.id, orElse: () => current);
+    final newQueue = [fresh, ...state.queue.skip(1)];
+    final newCardMap = Map<String, CardModel>.of(state.cardMap)
+      ..[fresh.id] = fresh;
+    state = state.copyWith(queue: newQueue, cardMap: newCardMap);
+  }
 }
 
 final popStudyProvider = NotifierProvider.autoDispose
